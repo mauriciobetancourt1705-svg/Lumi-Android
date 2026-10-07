@@ -15,6 +15,8 @@ sealed class LumiIntent {
     data object Greeting : LumiIntent()
     data object Thanks : LumiIntent()
     data object Status : LumiIntent()
+    data object AutonomyStatus : LumiIntent()
+    data object Privacy : LumiIntent()
     data class Conversation(val text: String) : LumiIntent()
 }
 
