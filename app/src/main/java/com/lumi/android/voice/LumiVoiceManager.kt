@@ -12,6 +12,7 @@ class LumiVoiceManager(context: Context) : TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private var tts: TextToSpeech? = null
     private var initialized = false
+    private val readyListeners = mutableListOf<() -> Unit>()
     private val utteranceCounter = AtomicInteger(0)
     private val callbacks = ConcurrentHashMap<String, PendingSpeech>()
 
@@ -62,7 +63,16 @@ class LumiVoiceManager(context: Context) : TextToSpeech.OnInitListener {
         initialized = true
         tts?.setLanguage(preferredLocale)
         applySettings()
+        val listeners = readyListeners.toList()
+        readyListeners.clear()
+        listeners.forEach { it.invoke() }
     }
+
+    fun onReady(listener: () -> Unit) {
+        if (initialized) listener() else readyListeners.add(listener)
+    }
+
+    fun isReady(): Boolean = initialized
 
     fun availableSpanishVoices(): List<Voice> =
         tts?.voices
@@ -116,6 +126,7 @@ class LumiVoiceManager(context: Context) : TextToSpeech.OnInitListener {
 
     fun stop() {
         callbacks.clear()
+        readyListeners.clear()
         tts?.stop()
     }
 
