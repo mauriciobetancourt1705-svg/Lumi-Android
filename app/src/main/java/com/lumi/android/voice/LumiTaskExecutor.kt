@@ -11,6 +11,8 @@ class LumiTaskExecutor(
                 androidExecutor.execute(LumiIntent.OpenApp(task.query)) { message, _ -> onResult(message) }
             is LumiTask.WebSearch ->
                 androidExecutor.execute(LumiIntent.WebSearch(task.query)) { message, _ -> onResult(message) }
+            is LumiTask.PlayContent ->
+                androidExecutor.execute(LumiIntent.PlayContent(task.query)) { message, _ -> onResult(message) }
             is LumiTask.SendMessage ->
                 onResult("Este paso necesita confirmación antes de enviarse.")
         }
