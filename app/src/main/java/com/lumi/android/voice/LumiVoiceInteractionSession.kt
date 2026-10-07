@@ -24,6 +24,10 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private var voiceManager: LumiVoiceManager? = null
     private val intentEngine = LumiIntentEngine()
     private lateinit var actionExecutor: LumiAndroidActionExecutor
+    private lateinit var messageExecutor: LumiMessageActionExecutor
+    private val messageEngine = LumiMessageEngine()
+    private var pendingMessage: LumiMessageRequest? = null
+    private var pendingContact: LumiContact? = null
     private val venezuelanLocale = Locale("es", "VE")
 
     private val listener = object : RecognitionListener {
@@ -95,6 +99,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         root.addView(transcript)
 
         actionExecutor = LumiAndroidActionExecutor(context)
+        messageExecutor = LumiMessageActionExecutor(context, LumiContactResolver(context))
         prepareRecognizer()
         voiceManager = LumiVoiceManager(context)
         handler.postDelayed({ startListening() }, 300L)
@@ -142,6 +147,38 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     private fun handleUserTurn(rawText: String) {
+        val normalized = rawText.trim().lowercase()
+        if (pendingMessage != null && pendingContact != null) {
+            if (normalized in setOf("sí", "si", "sí, envíalo", "si envialo", "envíalo", "envialo", "hazlo", "adelante")) {
+                val request = pendingMessage!!
+                val contact = pendingContact!!
+                pendingMessage = null
+                pendingContact = null
+                respond(messageExecutor.send(request, contact))
+                return
+            }
+            if (normalized in setOf("no", "cancelar", "cancela", "no lo envíes", "no lo envies")) {
+                pendingMessage = null
+                pendingContact = null
+                respond("Listo, no envié nada.")
+                return
+            }
+        }
+
+        val messageRequest = messageEngine.parse(rawText)
+        if (messageRequest != null) {
+            silenceMode = false
+            val (contact, confirmation) = messageExecutor.prepare(messageRequest)
+            if (contact == null) {
+                respond(confirmation)
+            } else {
+                pendingMessage = messageRequest
+                pendingContact = contact
+                respond(confirmation)
+            }
+            return
+        }
+
         when (val intent = intentEngine.parse(rawText)) {
             LumiIntent.Silence -> {
                 silenceMode = true
