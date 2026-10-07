@@ -18,16 +18,21 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private var recognizer: SpeechRecognizer? = null
     private var listening = false
     private var speaking = false
+    private var silenceMode = false
     private lateinit var status: TextView
     private lateinit var transcript: TextView
+    private var voiceManager: LumiVoiceManager? = null
+
+    private val venezuelanLocale = Locale("es", "VE")
 
     private val listener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
             listening = true
-            status.text = "Lumi está escuchando…"
+            status.text = if (silenceMode) "Lumi está en silencio" else "Lumi está escuchando…"
         }
 
         override fun onBeginningOfSpeech() {
+            if (speaking) stopSpeaking()
             status.text = "Te escucho…"
         }
 
@@ -36,12 +41,17 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
 
         override fun onPartialResults(results: Bundle?) {
             val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
-            if (!text.isNullOrBlank()) transcript.text = text
+            if (!text.isNullOrBlank()) {
+                transcript.text = text
+                if (speaking) stopSpeaking()
+            }
         }
 
         override fun onResults(results: Bundle?) {
             listening = false
-            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
+            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()?.trim().orEmpty()
+
             if (text.isNotEmpty()) {
                 transcript.text = text
                 handleUserTurn(text)
@@ -57,8 +67,10 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
 
         override fun onError(error: Int) {
             listening = false
-            status.text = "Lumi sigue disponible"
-            scheduleListen(600L)
+            if (!silenceMode) {
+                status.text = "Lumi sigue disponible"
+                scheduleListen(600L)
+            }
         }
 
         override fun onEvent(eventType: Int, params: Bundle?) = Unit
@@ -84,6 +96,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         root.addView(transcript)
 
         prepareRecognizer()
+        voiceManager = LumiVoiceManager(context)
         handler.postDelayed({ startListening() }, 300L)
         return root
     }
@@ -107,11 +120,12 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     private fun startListening() {
-        if (listening || recognizer == null || speaking) return
+        if (silenceMode || listening || recognizer == null || speaking) return
 
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-ES")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "es-ES")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, venezuelanLocale.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, venezuelanLocale.toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
@@ -127,43 +141,62 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     private fun scheduleListen(delay: Long = 450L) {
-        handler.postDelayed({ startListening() }, delay)
+        if (!silenceMode) handler.postDelayed({ startListening() }, delay)
     }
 
     private fun handleUserTurn(rawText: String) {
-        val text = rawText.trim()
-        val normalized = text.lowercase(Locale("es", "ES"))
+        val normalized = rawText.trim().lowercase(venezuelanLocale)
 
         if (normalized.contains("lumi") || normalized.startsWith("oye") || normalized.startsWith("hola")) {
-            val answer = when {
-                normalized.contains("espera") || normalized.contains("cállate") -> "Claro. Me quedo en silencio."
-                normalized.contains("cómo estás") -> "Estoy aquí contigo. ¿Qué necesitas?"
-                normalized.contains("gracias") -> "Siempre."
-                else -> "Te escucho. Cuéntame."
+            when {
+                normalized.contains("espera") || normalized.contains("cállate") ||
+                    normalized.contains("callate") -> {
+                    silenceMode = true
+                    stopSpeaking()
+                    try { recognizer?.cancel() } catch (_: RuntimeException) { }
+                    status.text = "Lumi está en silencio"
+                    transcript.text = "Cuando quieras continuar, di «Lumi, sigue»."
+                }
+                normalized.contains("sigue") || normalized.contains("continúa") ||
+                    normalized.contains("continua") -> {
+                    silenceMode = false
+                    respond("Claro, aquí estoy. Te escucho.")
+                }
+                normalized.contains("cómo estás") || normalized.contains("como estas") -> {
+                    respond("Estoy aquí contigo. ¿Qué necesitas?")
+                }
+                normalized.contains("gracias") -> respond("Siempre.")
+                else -> respond("Te escucho. Cuéntame.")
             }
-            respond(answer)
-        } else {
-            // During an active Lumi session we keep listening without interrupting.
+        } else if (!silenceMode) {
             status.text = "Te sigo escuchando…"
             scheduleListen(250L)
         }
     }
 
     private fun respond(text: String) {
+        silenceMode = false
         speaking = true
         listening = false
         try { recognizer?.cancel() } catch (_: RuntimeException) { }
         status.text = "Lumi está hablando…"
         transcript.text = text
-
-        val voice = LumiVoiceManager(context)
-        voice.speak(text)
+        voiceManager?.speak(text)
         handler.postDelayed({
-            voice.shutdown()
-            speaking = false
-            status.text = "Lumi está escuchando…"
-            startListening()
+            if (speaking) {
+                speaking = false
+                status.text = "Lumi está escuchando…"
+                startListening()
+            }
         }, estimateSpeechDuration(text))
+    }
+
+    private fun stopSpeaking() {
+        if (!speaking) return
+        voiceManager?.stop()
+        speaking = false
+        status.text = "Te escucho…"
+        startListening()
     }
 
     private fun estimateSpeechDuration(text: String): Long =
@@ -172,13 +205,17 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     override fun onHide() {
         super.onHide()
         try { recognizer?.cancel() } catch (_: RuntimeException) { }
+        voiceManager?.stop()
         handler.removeCallbacksAndMessages(null)
         listening = false
+        speaking = false
     }
 
     override fun onDestroy() {
         try { recognizer?.destroy() } catch (_: RuntimeException) { }
         recognizer = null
+        voiceManager?.shutdown()
+        voiceManager = null
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
