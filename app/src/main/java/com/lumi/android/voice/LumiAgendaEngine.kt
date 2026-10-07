@@ -59,8 +59,8 @@ class LumiAgendaEngine(private val nowMillis: () -> Long = { System.currentTimeM
     fun describe(request: LumiAgendaRequest): String {
         val fmt = SimpleDateFormat("EEE d 'de' MMMM 'a las' HH:mm", Locale("es", "VE"))
         return if (request.type == LumiAgendaRequest.Type.REMINDER)
-            "Puedo recordarte «\${request.title}» el \${fmt.format(request.triggerAtMillis)}."
+            "Puedo recordarte «${request.title}» el ${fmt.format(request.triggerAtMillis)}."
         else
-            "Puedo crear el evento «\${request.title}» el \${fmt.format(request.triggerAtMillis)}."
+            "Puedo crear el evento «${request.title}» el ${fmt.format(request.triggerAtMillis)}."
     }
 }
