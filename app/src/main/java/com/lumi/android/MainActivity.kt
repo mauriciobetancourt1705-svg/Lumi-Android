@@ -251,7 +251,14 @@ class MainActivity : AppCompatActivity() {
         box.addView(educationStatus,lp())
         box.addView(Button(this).apply{text="Guardar y probar";setOnClickListener{
             educationBridge.saveConfig(educationUrl.text.toString(),educationToken.text.toString())
-            educationBridge.health{result->runOnUiThread{educationStatus.text="Education: $result"}}
+            educationBridge.validateSession{ok,result->runOnUiThread{
+                educationStatus.text=if(ok) "Education: $result" else "Education: $result"
+            }}
+        }},lp())
+        box.addView(Button(this).apply{text="Comprobar sesión";setOnClickListener{
+            educationBridge.validateSession{ok,result->runOnUiThread{
+                educationStatus.text=if(ok) "🟢 $result" else "🔴 $result"
+            }}
         }},lp())
         dialog.setContentView(box);dialog.show()
     }
