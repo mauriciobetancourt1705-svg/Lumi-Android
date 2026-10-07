@@ -105,6 +105,30 @@ class LumiEducationBridge(context: Context) {
         }
     }
 
+
+
+    /**
+     * TTS neural de Lumi usado por Education.
+     * Devuelve MP3 generado por /api/v1/ai/lumi-tts.
+     */
+    fun lumiTts(
+        text: String,
+        voice: String = "Gacrux",
+        callback: (audio: ByteArray, mimeType: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val clean = text.replace(Regex("[*#_]"), "").replace(Regex("\\s+"), " ").trim().take(5000)
+        if (clean.isBlank()) {
+            onError("text_required")
+            return
+        }
+        val body = JSONObject().apply {
+            put("text", clean)
+            put("voice", voice)
+        }
+        requestBytes("POST", "/api/v1/ai/lumi-tts", body, true, callback, onError)
+    }
+
     fun bcvRate(callback: (String) -> Unit) {
         request("GET", "/api/v1/finance/bcv-rate", null, true, callback) { json ->
             val usd = json.optDouble("usd", Double.NaN)
@@ -175,6 +199,51 @@ class LumiEducationBridge(context: Context) {
             } finally {
                 connection?.disconnect()
             }
+        }
+    }
+
+    private fun requestBytes(
+        method: String,
+        path: String,
+        body: JSONObject?,
+        auth: Boolean,
+        callback: (ByteArray, String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val cfg = config()
+        if (cfg.baseUrl.isBlank()) { onError("education_url_missing"); return }
+        if (auth && cfg.token.isBlank()) { onError("education_token_missing"); return }
+        executor.execute {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = (URL(cfg.baseUrl + path).openConnection() as HttpURLConnection).apply {
+                    requestMethod = method
+                    connectTimeout = 8000
+                    readTimeout = 30000
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", "Lumi-Android/Education-Bridge")
+                    if (auth) setRequestProperty("Authorization", "Bearer " + cfg.token)
+                    if (body != null) {
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                        outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                    }
+                }
+                val code = connection.responseCode
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream
+                val responseText = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                val json = runCatching { JSONObject(responseText) }.getOrElse { JSONObject() }
+                if (code in 200..299) {
+                    val encoded = json.optString("audioBase64", "")
+                    if (encoded.isBlank()) { onError("tts_empty_response"); return@execute }
+                    val bytes = android.util.Base64.decode(encoded, android.util.Base64.DEFAULT)
+                    callback(bytes, json.optString("mimeType", "audio/mpeg"))
+                } else {
+                    onError(json.optString("error").ifBlank { "education_http_$code" })
+                }
+            } catch (e: Exception) {
+                onError(e.message ?: "education_network_error")
+            } finally { connection?.disconnect() }
         }
     }
 

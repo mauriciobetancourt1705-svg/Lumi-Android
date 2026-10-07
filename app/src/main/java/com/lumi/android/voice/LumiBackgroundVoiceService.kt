@@ -19,6 +19,7 @@ import java.util.Locale
 class LumiBackgroundVoiceService : Service() {
     private var recognizer: SpeechRecognizer? = null
     private lateinit var voice: LumiVoiceManager
+    private lateinit var neuralTtsPlayer: LumiNeuralTtsPlayer
     private lateinit var actionExecutor: LumiAndroidActionExecutor
     private val intentEngine = LumiIntentEngine()
     private lateinit var memory: LumiMemoryStore
@@ -48,6 +49,7 @@ class LumiBackgroundVoiceService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         voice = LumiVoiceManager(this)
+        neuralTtsPlayer = LumiNeuralTtsPlayer(this)
         actionExecutor = LumiAndroidActionExecutor(this)
         memory = LumiMemoryStore(this)
         educationBridge = LumiEducationBridge(this)
@@ -122,7 +124,7 @@ class LumiBackgroundVoiceService : Service() {
             }
             LumiIntent.Greeting -> askEducationLumi(raw)
             LumiIntent.Thanks -> askEducationLumi(raw)
-            LumiIntent.Status -> speak(personality.greeting(moment = com.lumi.android.wellbeing.LumiPersonalityEngine.Moment.CHECK_IN))
+            LumiIntent.Status -> askEducationLumi(raw)
             is LumiIntent.OpenApp,
             is LumiIntent.WebSearch,
             is LumiIntent.PlayContent,
@@ -164,26 +166,32 @@ class LumiBackgroundVoiceService : Service() {
         if (!active) return
         speaking = true
         try { recognizer?.cancel() } catch (_: RuntimeException) {}
-        voice.onReady {
-            voice.speak(
-                text,
-                onStart = {},
-                onDone = {
-                    speaking = false
-                    if (active) listen()
-                },
-                onError = {
-                    speaking = false
-                    if (active) listen()
-                }
-            )
+
+        fun nativeFallback() {
+            voice.onReady {
+                voice.speak(text, onStart = {}, onDone = { speaking = false; if (active) listen() }, onError = { speaking = false; if (active) listen() })
+            }
         }
+
+        if (educationBridge.isConfigured()) {
+            educationBridge.lumiTts(
+                text,
+                voice.educationVoiceId,
+                callback = { audio, mime ->
+                    android.os.Handler(mainLooper).post {
+                        neuralTtsPlayer.play(audio, mime, onStart = {}, onDone = { speaking = false; if (active) listen() }, onError = { nativeFallback() })
+                    }
+                },
+                onError = { nativeFallback() }
+            )
+        } else nativeFallback()
     }
 
     override fun onDestroy() {
         active = false
         try { recognizer?.cancel(); recognizer?.destroy() } catch (_: RuntimeException) {}
         recognizer = null
+        if (::neuralTtsPlayer.isInitialized) neuralTtsPlayer.stop()
         if (::voice.isInitialized) voice.shutdown()
         if (::educationBridge.isInitialized) educationBridge.shutdown()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)

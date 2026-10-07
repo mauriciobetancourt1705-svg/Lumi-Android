@@ -47,7 +47,9 @@ import com.lumi.android.wellbeing.LumiPersonalityEngine
 
 class MainActivity : AppCompatActivity() {
     private lateinit var voiceManager: LumiVoiceManager
+    private lateinit var neuralTtsPlayer: com.lumi.android.voice.LumiNeuralTtsPlayer
     private lateinit var voiceSpinner: Spinner
+    private lateinit var educationVoiceSpinner: Spinner
     private lateinit var pitchValue: TextView
     private lateinit var rateValue: TextView
     private lateinit var educationBridge: LumiEducationBridge
@@ -63,6 +65,8 @@ class MainActivity : AppCompatActivity() {
     private var conversationActive = false
     private var listening = false
     private var speaking = false
+    private var listenGeneration = 0L
+    private var listenScheduled = false
     private val personality = LumiPersonalityEngine()
     private val intentEngine = LumiIntentEngine()
     private lateinit var androidActionExecutor: com.lumi.android.voice.LumiAndroidActionExecutor
@@ -90,123 +94,86 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         voiceManager = LumiVoiceManager(this)
+        neuralTtsPlayer = com.lumi.android.voice.LumiNeuralTtsPlayer(this)
+        educationVoiceSpinner = Spinner(this)
         val personality = LumiPersonalityEngine()
         educationBridge = LumiEducationBridge(this)
         scheduleDailyWellbeingCheckIn()
         autonomy = LumiAutonomyController(this)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 42, 32, 32) }
-        root.addView(ImageView(this).apply {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(28, 36, 28, 28)
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            setBackgroundColor(android.graphics.Color.rgb(8, 18, 32))
+        }
+
+        val logo = ImageView(this).apply {
             setImageResource(com.lumi.android.R.drawable.lumi_logo)
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setPadding(0, 0, 0, 16)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 220))
-        root.addView(TextView(this).apply { text = "Lumi · Agente Asistente de IA"; textSize = 26f })
-        root.addView(TextView(this).apply { text = "Lumi usa el cerebro conversacional de Education y ejecuta acciones de forma nativa en Android."; textSize = 16f; setPadding(0, 12, 0, 20) })
-        voiceSpinner = Spinner(this)
-        root.addView(voiceSpinner, lp())
-        pitchValue = TextView(this).apply { textSize = 15f }
-        root.addView(pitchValue)
-        root.addView(SeekBar(this).apply {
-            max = 200
-            progress = ((voiceManager.pitch - 0.5f) * 100f).toInt().coerceIn(0, 200)
-            setOnSeekBarChangeListener(seekListener { value -> voiceManager.pitch = 0.5f + value / 100f; updateLabels() })
+        }
+        root.addView(logo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 180))
+
+        val title = TextView(this).apply {
+            text = "Lumi"
+            textSize = 34f
+            setTextColor(android.graphics.Color.WHITE)
+            gravity = android.view.Gravity.CENTER
+        }
+        root.addView(title, lp())
+
+        root.addView(TextView(this).apply {
+            text = "Tu asistente de IA"
+            textSize = 17f
+            setTextColor(android.graphics.Color.LTGRAY)
+            gravity = android.view.Gravity.CENTER
         }, lp())
-        rateValue = TextView(this).apply { textSize = 15f }
-        root.addView(rateValue)
-        root.addView(SeekBar(this).apply {
-            max = 150
-            progress = ((voiceManager.speechRate - 0.5f) * 100f).toInt().coerceIn(0, 150)
-            setOnSeekBarChangeListener(seekListener { value -> voiceManager.speechRate = 0.5f + value / 100f; updateLabels() })
-        }, lp())
-        root.addView(Button(this).apply { text = "Probar voz de Lumi"; setOnClickListener { voiceManager.speak("Hola, soy Lumi. Esta es la voz que has elegido.") } }, lp())
-        root.addView(Button(this).apply {
-            text = "INSTALAR / CONFIGURAR VOCES ESPAÑOLAS"
-            setOnClickListener {
-                try {
-                    startActivity(Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
-                } catch (_: android.content.ActivityNotFoundException) {
-                    voiceStatus.text = "El motor TTS no ofrece un instalador en este teléfono."
-                }
-            }
-        }, lp())
+
         voiceStatus = TextView(this).apply {
-            text = "Lumi está lista para escucharte."
-            textSize = 15f
-            setPadding(0, 18, 0, 4)
-        }
-        root.addView(voiceStatus)
-        voiceTranscript = TextView(this).apply {
-            text = "Pulsa «Hablar con Lumi» y dime algo."
+            text = "Estoy lista. Pulsa el botón y háblame."
             textSize = 16f
-            setPadding(0, 4, 0, 12)
+            setTextColor(android.graphics.Color.WHITE)
+            gravity = android.view.Gravity.CENTER
+            setPadding(12, 28, 12, 12)
         }
-        root.addView(voiceTranscript)
+        root.addView(voiceStatus, lp())
+
+        voiceTranscript = TextView(this).apply {
+            text = "Aquí aparecerá lo que me digas."
+            textSize = 18f
+            setTextColor(android.graphics.Color.WHITE)
+            gravity = android.view.Gravity.CENTER
+            setPadding(18, 18, 18, 24)
+            setBackgroundColor(android.graphics.Color.rgb(18, 35, 54))
+        }
+        root.addView(voiceTranscript, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 150).apply { topMargin = 18 })
+
         root.addView(Button(this).apply {
-            text = "HABLAR CON LUMI"
+            text = "🎙  HABLAR CON LUMI"
+            textSize = 18f
             setOnClickListener { toggleConversation() }
-        }, lp())
-        root.addView(Button(this).apply { text = "Permiso opcional: contactos"; setOnClickListener { requestContacts() } }, lp())
-        root.addView(Button(this).apply { text = "Permiso opcional: notificaciones"; setOnClickListener { requestNotifications() } }, lp())
-        root.addView(Button(this).apply { text = "Permiso opcional: contexto y notificaciones"; setOnClickListener { startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) } }, lp())
-        root.addView(TextView(this).apply { text = "Lumi 24/7 · Seguridad y autonomía"; textSize = 21f; setPadding(0, 28, 0, 8) })
-        autonomyStatus = TextView(this).apply { textSize = 14f; text = autonomy.status(this@MainActivity) }
-        root.addView(autonomyStatus)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 64).apply { topMargin = 24 })
+
         root.addView(Button(this).apply {
-            text = if (autonomy.enabled) "Desactivar Lumi 24/7" else "Activar Lumi 24/7"
-            setOnClickListener {
-                autonomy.enabled = !autonomy.enabled
-                if (autonomy.enabled) startLumiBackgroundService() else stopLumiBackgroundService()
-                text = if (autonomy.enabled) "Desactivar Lumi 24/7" else "Activar Lumi 24/7"
-                autonomyStatus.text = autonomy.status(this@MainActivity)
-            }
+            text = "⚙  Ajustes de Lumi"
+            setOnClickListener { showLumiSettings() }
         }, lp())
-        root.addView(Button(this).apply {
-            text = if (autonomy.backgroundListening) "Desactivar escucha en segundo plano" else "Autorizar escucha en segundo plano"
-            setOnClickListener {
-                if (!autonomy.enabled) autonomy.enabled = true
-                autonomy.backgroundListening = !autonomy.backgroundListening
-                if (autonomy.backgroundListening) startLumiBackgroundService() else stopLumiBackgroundService()
-                text = if (autonomy.backgroundListening) "Desactivar escucha en segundo plano" else "Autorizar escucha en segundo plano"
-                autonomyStatus.text = autonomy.status(this@MainActivity)
-            }
+
+        voiceSpinner = Spinner(this)
+        pitchValue = TextView(this)
+        rateValue = TextView(this)
+        educationUrl = EditText(this)
+        educationToken = EditText(this)
+        educationStatus = TextView(this)
+        autonomyStatus = TextView(this).apply { text = autonomy.status(this@MainActivity) }
+
+        root.addView(TextView(this).apply {
+            text = "Lumi usa el cerebro conversacional de Education y ejecuta acciones de forma nativa en Android."
+            textSize = 13f
+            setTextColor(android.graphics.Color.GRAY)
+            gravity = android.view.Gravity.CENTER
+            setPadding(8, 22, 8, 8)
         }, lp())
-        root.addView(TextView(this).apply { text = autonomy.privacySummary(); textSize = 13f; setPadding(0, 8, 0, 8) })
-        root.addView(TextView(this).apply { text = "Cerebro de Lumi · Education"; textSize = 21f; setPadding(0, 28, 0, 8) })
-        educationUrl = EditText(this).apply {
-            hint = "URL de Education (https://...)"
-            setSingleLine(true)
-            setText(educationBridge.config().baseUrl)
-        }
-        root.addView(educationUrl, lp())
-        educationToken = EditText(this).apply {
-            hint = "Token Bearer de Education"
-            setSingleLine(true)
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setText(educationBridge.config().token)
-        }
-        root.addView(educationToken, lp())
-        educationStatus = TextView(this).apply { text = "Education: sin configurar"; textSize = 14f; setPadding(0, 8, 0, 4) }
-        root.addView(educationStatus)
-        root.addView(Button(this).apply {
-            text = "Guardar conexión"
-            setOnClickListener {
-                educationBridge.saveConfig(educationUrl.text.toString(), educationToken.text.toString())
-                educationStatus.text = "Education: configuración guardada"
-            }
-        }, lp())
-        root.addView(Button(this).apply {
-            text = "Probar conexión con Education"
-            setOnClickListener {
-                educationBridge.saveConfig(educationUrl.text.toString(), educationToken.text.toString())
-                educationStatus.text = "Education: comprobando…"
-                educationBridge.health { result -> runOnUiThread { educationStatus.text = "Education: $result" } }
-            }
-        }, lp())
-        root.addView(TextView(this).apply { text = "Capa 13 · Personalidad y bienestar"; textSize = 21f; setPadding(0, 28, 0, 8) })
-        root.addView(TextView(this).apply { text = "Lumi puede acercarse una vez al día para preguntarte cómo estás. Tú decides cuándo y puedes ignorar el aviso."; textSize = 14f; setPadding(0, 0, 0, 8) })
-        root.addView(Button(this).apply { text = "Programar check-in diario de Lumi"; setOnClickListener { scheduleDailyWellbeingCheckIn(); voiceManager.speak("Listo. Te recordaré una vez al día para saber cómo estás.") } }, lp())
-        root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
         androidActionExecutor = com.lumi.android.voice.LumiAndroidActionExecutor(this)
         memoryStore = LumiMemoryStore(this)
         contextEngine = LumiContextEngine()
@@ -240,6 +207,55 @@ class MainActivity : AppCompatActivity() {
         updateLabels()
     }
 
+    private fun showLumiSettings() {
+        val dialog = android.app.Dialog(this)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 28, 32, 28)
+        }
+        box.addView(TextView(this).apply { text = "Ajustes de Lumi"; textSize = 24f }, lp())
+        box.addView(TextView(this).apply { text = "Voz y conexión"; textSize = 17f; setPadding(0, 18, 0, 6) }, lp())
+        box.addView(TextView(this).apply { text = "Voz neural de Lumi (Education)"; textSize = 15f }, lp())
+        box.addView(educationVoiceSpinner, lp())
+        updateEducationVoiceList()
+        box.addView(voiceSpinner, lp())
+        box.addView(Button(this).apply {
+            text = "Probar voz"
+            setOnClickListener {
+                if (educationBridge.isConfigured()) {
+                    educationBridge.lumiTts("Hola, soy Lumi. Estoy aquí contigo.", voiceManager.educationVoiceId,
+                        callback = { audio, mime -> runOnUiThread { neuralTtsPlayer.play(audio, mime, {}, {}, { voiceManager.speak("Hola, soy Lumi. Estoy aquí contigo.") }) } },
+                        onError = { runOnUiThread { voiceManager.speak("Hola, soy Lumi. Estoy aquí contigo.") } })
+                } else voiceManager.speak("Hola, soy Lumi. Estoy aquí contigo.")
+            }
+        }, lp())
+        box.addView(Button(this).apply { text = "Configurar voces españolas"; setOnClickListener { try { startActivity(Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)) } catch (_: Exception) {} } }, lp())
+        box.addView(Button(this).apply { text = "Conexión con Education"; setOnClickListener { showEducationConnectionDialog() } }, lp())
+        box.addView(Button(this).apply { text = "Privacidad y permisos"; setOnClickListener { requestMicrophone(); requestNotifications() } }, lp())
+        box.addView(Button(this).apply { text = "Lumi 24/7"; setOnClickListener { autonomy.enabled=!autonomy.enabled; if(autonomy.enabled) startLumiBackgroundService() else stopLumiBackgroundService(); autonomyStatus.text=autonomy.status(this@MainActivity) } }, lp())
+        dialog.setContentView(box)
+        dialog.setTitle("Lumi")
+        dialog.show()
+    }
+
+    private fun showEducationConnectionDialog() {
+        val dialog=android.app.Dialog(this)
+        val box=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(28,24,28,24)}
+        box.addView(TextView(this).apply{text="Education · cerebro de Lumi";textSize=22f},lp())
+        educationUrl.setText(educationBridge.config().baseUrl)
+        educationToken.setText(educationBridge.config().token)
+        educationToken.inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        box.addView(educationUrl,lp())
+        box.addView(educationToken,lp())
+        educationStatus.text=if(educationBridge.isConfigured()) "Conexión configurada" else "Conexión pendiente"
+        box.addView(educationStatus,lp())
+        box.addView(Button(this).apply{text="Guardar y probar";setOnClickListener{
+            educationBridge.saveConfig(educationUrl.text.toString(),educationToken.text.toString())
+            educationBridge.health{result->runOnUiThread{educationStatus.text="Education: $result"}}
+        }},lp())
+        dialog.setContentView(box);dialog.show()
+    }
+
     private fun scheduleDailyWellbeingCheckIn() {
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 19)
@@ -255,6 +271,19 @@ class MainActivity : AppCompatActivity() {
         val pending = PendingIntent.getBroadcast(this, 13013, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pending)
     }
+    private fun updateEducationVoiceList() {
+        val profiles = LumiVoiceManager.EDUCATION_VOICES
+        educationVoiceSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, profiles.map { it.second })
+        val selected = profiles.indexOfFirst { it.first == voiceManager.educationVoiceId }
+        if (selected >= 0) educationVoiceSpinner.setSelection(selected)
+        educationVoiceSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                if (position in profiles.indices) voiceManager.educationVoiceId = profiles[position].first
+            }
+        }
+    }
+
     private fun updateVoiceList() {
         val voices = voiceManager.availableSpanishVoices()
         val labels = voices.map { voiceManager.voiceLabel(it) }.ifEmpty { listOf("No hay voces españolas disponibles") }
@@ -380,6 +409,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startConversation() {
+        listenGeneration++
+        listenScheduled = false
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
             return
@@ -393,13 +424,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun scheduleConversationListen(delay: Long) {
-        if (!conversationActive || speaking || listening) return
+        if (!conversationActive || speaking || listening || speechRecognizer == null) return
         voiceHandler.removeCallbacksAndMessages(null)
-        voiceHandler.postDelayed({ startListeningNow() }, delay)
+        val generation = ++listenGeneration
+        listenScheduled = true
+        voiceHandler.postDelayed({
+            if (generation != listenGeneration) { listenScheduled = false; return@postDelayed }
+            listenScheduled = false
+            startListeningNow()
+        }, delay)
     }
 
     private fun startListeningNow() {
-        if (!conversationActive || speaking || listening || speechRecognizer == null) return
+        if (!conversationActive || speaking || listening || speechRecognizer == null || listenScheduled) return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-VE")
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "es-VE")
@@ -540,9 +577,9 @@ class MainActivity : AppCompatActivity() {
                 voiceStatus.text = "Lumi está en silencio."
             }
             LumiIntent.Resume -> speakInApp("Claro. Aquí estoy. Te escucho.")
-            LumiIntent.Greeting -> speakInApp("Hola. Aquí estoy contigo.")
-            LumiIntent.Thanks -> speakInApp("Siempre.")
-            LumiIntent.Status -> speakInApp(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
+            LumiIntent.Greeting -> askEducationLumiInApp(rawText)
+            LumiIntent.Thanks -> askEducationLumiInApp(rawText)
+            LumiIntent.Status -> askEducationLumiInApp(rawText)
             LumiIntent.AutonomyStatus -> speakInApp(autonomy.status(this))
             LumiIntent.Privacy -> speakInApp(autonomy.privacySummary())
             is LumiIntent.OpenApp,
@@ -610,37 +647,45 @@ class MainActivity : AppCompatActivity() {
         try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
         voiceStatus.text = "Lumi está hablando…"
         voiceTranscript.text = text
-        voiceManager.speak(
-            text,
-            onStart = { runOnUiThread { voiceStatus.text = "Lumi está hablando…" } },
-            onDone = {
-                runOnUiThread {
-                    speaking = false
-                    if (conversationActive) {
-                        voiceStatus.text = "Lumi está escuchando…"
-                        scheduleConversationListen(300L)
+
+        fun nativeFallback() {
+            voiceManager.speak(
+                text,
+                onStart = { runOnUiThread { voiceStatus.text = "Lumi está hablando…" } },
+                onDone = { runOnUiThread { speaking = false; if (conversationActive) { voiceStatus.text = "Lumi está escuchando…"; scheduleConversationListen(300L) } } },
+                onError = { runOnUiThread { speaking = false; if (conversationActive) { voiceStatus.text = "Lumi sigue disponible."; scheduleConversationListen(500L) } } }
+            )
+        }
+
+        if (educationBridge.isConfigured()) {
+            educationBridge.lumiTts(
+                text,
+                voiceManager.educationVoiceId,
+                callback = { audio, mime ->
+                    runOnUiThread {
+                        neuralTtsPlayer.play(
+                            audio, mime,
+                            onStart = { voiceStatus.text = "Lumi está hablando…" },
+                            onDone = { speaking = false; if (conversationActive) { voiceStatus.text = "Lumi está escuchando…"; scheduleConversationListen(300L) } },
+                            onError = { nativeFallback() }
+                        )
                     }
-                }
-            },
-            onError = {
-                runOnUiThread {
-                    speaking = false
-                    if (conversationActive) {
-                        voiceStatus.text = "Lumi sigue disponible."
-                        scheduleConversationListen(500L)
-                    }
-                }
-            }
-        )
+                },
+                onError = { runOnUiThread { nativeFallback() } }
+            )
+        } else nativeFallback()
     }
 
     private fun stopConversation() {
+        listenGeneration++
+        listenScheduled = false
         conversationActive = false
         speaking = false
         listening = false
         voiceHandler.removeCallbacksAndMessages(null)
         try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
         voiceManager.stop()
+        neuralTtsPlayer.stop()
         voiceStatus.text = "Lumi está en espera."
     }
 
@@ -667,6 +712,7 @@ class MainActivity : AppCompatActivity() {
         try { speechRecognizer?.destroy() } catch (_: RuntimeException) {}
         speechRecognizer = null
         educationBridge.shutdown()
+        neuralTtsPlayer.stop()
         voiceManager.shutdown()
         super.onDestroy()
     }
