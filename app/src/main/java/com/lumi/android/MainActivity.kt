@@ -614,6 +614,7 @@ class MainActivity : AppCompatActivity() {
         voiceStatus.text = "Lumi está pensando…"
         educationBridge.lumiConversation(rawText, memoryStore.recentTurns()) { result ->
             runOnUiThread { speakInApp(result) }
+            educationBridge.syncLumiWellbeingHistory(memoryStore.recentTurns())
         }
     }
 
