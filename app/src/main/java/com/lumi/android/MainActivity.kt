@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var voiceManager: LumiVoiceManager
     private lateinit var neuralTtsPlayer: com.lumi.android.voice.LumiNeuralTtsPlayer
     private lateinit var voiceSpinner: Spinner
+    private lateinit var educationVoiceSpinner: Spinner
     private lateinit var pitchValue: TextView
     private lateinit var rateValue: TextView
     private lateinit var educationBridge: LumiEducationBridge
@@ -94,6 +95,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         voiceManager = LumiVoiceManager(this)
         neuralTtsPlayer = com.lumi.android.voice.LumiNeuralTtsPlayer(this)
+        educationVoiceSpinner = Spinner(this)
         val personality = LumiPersonalityEngine()
         educationBridge = LumiEducationBridge(this)
         scheduleDailyWellbeingCheckIn()
@@ -213,8 +215,20 @@ class MainActivity : AppCompatActivity() {
         }
         box.addView(TextView(this).apply { text = "Ajustes de Lumi"; textSize = 24f }, lp())
         box.addView(TextView(this).apply { text = "Voz y conexión"; textSize = 17f; setPadding(0, 18, 0, 6) }, lp())
+        box.addView(TextView(this).apply { text = "Voz neural de Lumi (Education)"; textSize = 15f }, lp())
+        box.addView(educationVoiceSpinner, lp())
+        updateEducationVoiceList()
         box.addView(voiceSpinner, lp())
-        box.addView(Button(this).apply { text = "Probar voz"; setOnClickListener { voiceManager.speak("Hola, soy Lumi. Estoy aquí contigo.") } }, lp())
+        box.addView(Button(this).apply {
+            text = "Probar voz"
+            setOnClickListener {
+                if (educationBridge.isConfigured()) {
+                    educationBridge.lumiTts("Hola, soy Lumi. Estoy aquí contigo.", voiceManager.educationVoiceId,
+                        callback = { audio, mime -> runOnUiThread { neuralTtsPlayer.play(audio, mime, {}, {}, { voiceManager.speak("Hola, soy Lumi. Estoy aquí contigo.") }) } },
+                        onError = { runOnUiThread { voiceManager.speak("Hola, soy Lumi. Estoy aquí contigo.") } })
+                } else voiceManager.speak("Hola, soy Lumi. Estoy aquí contigo.")
+            }
+        }, lp())
         box.addView(Button(this).apply { text = "Configurar voces españolas"; setOnClickListener { try { startActivity(Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)) } catch (_: Exception) {} } }, lp())
         box.addView(Button(this).apply { text = "Conexión con Education"; setOnClickListener { showEducationConnectionDialog() } }, lp())
         box.addView(Button(this).apply { text = "Privacidad y permisos"; setOnClickListener { requestMicrophone(); requestNotifications() } }, lp())
@@ -257,6 +271,19 @@ class MainActivity : AppCompatActivity() {
         val pending = PendingIntent.getBroadcast(this, 13013, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pending)
     }
+    private fun updateEducationVoiceList() {
+        val profiles = LumiVoiceManager.EDUCATION_VOICES
+        educationVoiceSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, profiles.map { it.second })
+        val selected = profiles.indexOfFirst { it.first == voiceManager.educationVoiceId }
+        if (selected >= 0) educationVoiceSpinner.setSelection(selected)
+        educationVoiceSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                if (position in profiles.indices) voiceManager.educationVoiceId = profiles[position].first
+            }
+        }
+    }
+
     private fun updateVoiceList() {
         val voices = voiceManager.availableSpanishVoices()
         val labels = voices.map { voiceManager.voiceLabel(it) }.ifEmpty { listOf("No hay voces españolas disponibles") }
