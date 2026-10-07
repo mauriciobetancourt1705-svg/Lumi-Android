@@ -32,7 +32,7 @@ class LumiIntentEngine {
         if (containsAny(normalized, "gracias", "muchas gracias")) return LumiIntent.Thanks
         if (containsAny(normalized, "como estas", "cómo estas", "cómo estás", "como te sientes")) return LumiIntent.Status
 
-        extractAfter(normalized, listOf("abre ", "abrir ", "abre la app ", "abre el app ", "quiero ir a ", "ir a ", "llévame a ", "llevame a "))
+        extractAfter(normalized, listOf("abre ", "abrir ", "quiero abrir ", "quiero abrir la app ", "abre la app ", "abre el app ", "quiero ir a ", "ir a ", "llévame a ", "llevame a ", "ve a ", "ve al "))
             ?.takeIf { it.isNotBlank() }
             ?.let { return LumiIntent.OpenApp(it) }
 
