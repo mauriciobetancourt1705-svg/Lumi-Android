@@ -323,7 +323,6 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
                 }
                 pendingMessage = task.request
                 pendingContact = contact
-                pendingAgentTasks.removeAt(pendingAgentIndex)
                 respond("Paso " + (pendingAgentIndex + 1) + ": " + confirmation + " ¿Lo envío?")
             }
             else -> {
