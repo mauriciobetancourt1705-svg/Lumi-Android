@@ -102,7 +102,7 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 16)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 220))
         root.addView(TextView(this).apply { text = "Lumi · Agente Asistente de IA"; textSize = 26f })
-        root.addView(TextView(this).apply { text = "Voz, acciones Android y conexión opcional con Education."; textSize = 16f; setPadding(0, 12, 0, 20) })
+        root.addView(TextView(this).apply { text = "Lumi usa el cerebro conversacional de Education y ejecuta acciones de forma nativa en Android."; textSize = 16f; setPadding(0, 12, 0, 20) })
         voiceSpinner = Spinner(this)
         root.addView(voiceSpinner, lp())
         pitchValue = TextView(this).apply { textSize = 15f }
@@ -172,7 +172,7 @@ class MainActivity : AppCompatActivity() {
             }
         }, lp())
         root.addView(TextView(this).apply { text = autonomy.privacySummary(); textSize = 13f; setPadding(0, 8, 0, 8) })
-        root.addView(TextView(this).apply { text = "Conexión con Education"; textSize = 21f; setPadding(0, 28, 0, 8) })
+        root.addView(TextView(this).apply { text = "Cerebro de Lumi · Education"; textSize = 21f; setPadding(0, 28, 0, 8) })
         educationUrl = EditText(this).apply {
             hint = "URL de Education (https://...)"
             setSingleLine(true)
@@ -426,9 +426,13 @@ class MainActivity : AppCompatActivity() {
         if (educationIntent != null) {
             when (educationIntent) {
                 is com.lumi.android.voice.LumiEducationIntent.Tutor ->
-                    educationBridge.tutor(educationIntent.text) { result -> runOnUiThread { speakInApp(result) } }
+                    educationBridge.tutor(educationIntent.text, "aprender", memoryStore.recentTurns()) { result ->
+                        runOnUiThread { speakInApp(result) }
+                    }
                 is com.lumi.android.voice.LumiEducationIntent.Oraculo ->
-                    educationBridge.oraculo(educationIntent.text) { result -> runOnUiThread { speakInApp(result) } }
+                    educationBridge.oraculo(educationIntent.text, memoryStore.recentTurns()) { result ->
+                        runOnUiThread { speakInApp(result) }
+                    }
                 com.lumi.android.voice.LumiEducationIntent.BcvRate ->
                     educationBridge.bcvRate { result -> runOnUiThread { speakInApp(result) } }
             }
@@ -553,8 +557,19 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread { if (message.isBlank()) scheduleConversationListen(300L) else speakInApp(message) }
                 }
             }
-            is LumiIntent.Conversation -> speakInApp(personality.reply(rawText))
-            else -> speakInApp(personality.reply(rawText))
+            is LumiIntent.Conversation -> askEducationLumiInApp(rawText)
+            else -> askEducationLumiInApp(rawText)
+        }
+    }
+
+    private fun askEducationLumiInApp(rawText: String) {
+        if (!educationBridge.isConfigured()) {
+            speakInApp(personality.reply(rawText))
+            return
+        }
+        voiceStatus.text = "Lumi está pensando…"
+        educationBridge.lumiConversation(rawText, memoryStore.recentTurns()) { result ->
+            runOnUiThread { speakInApp(result) }
         }
     }
 
