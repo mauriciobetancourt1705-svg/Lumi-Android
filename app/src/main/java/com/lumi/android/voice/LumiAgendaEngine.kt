@@ -27,7 +27,7 @@ class LumiAgendaEngine(private val nowMillis: () -> Long = { System.currentTimeM
         val trigger = parseTime(raw) ?: return null
         val title = raw
             .replace(Regex("(?i)^.*?(recuérdame|recuerdame|recordatorio|cita|evento|calendario)\\s*"), "")
-            .replace(Regex("(?i)\\s*(mañana|manana|hoy|a las|a la|el)\\s+\\d{1,2}(?::\\d{2})?\\s*(am|pm)?\\s*$"), "")
+            .replace(Regex("(?i)\\s*(mañana|manana|hoy)\\s+(?:a\\s+las\\s+)?\\d{1,2}(?::\\d{2})?\\s*(am|pm)?\\s*$"), "")
             .trim(' ', '.', ':', '-', '—')
             .ifBlank { if (type == LumiAgendaRequest.Type.REMINDER) "Recordatorio de Lumi" else "Cita de Lumi" }
 
