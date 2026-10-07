@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Spinner
@@ -39,7 +40,13 @@ class MainActivity : AppCompatActivity() {
         scheduleDailyWellbeingCheckIn()
         autonomy = LumiAutonomyController(this)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 42, 32, 32) }
-        root.addView(TextView(this).apply { text = "Lumi Android · Voz"; textSize = 26f })
+        root.addView(ImageView(this).apply {
+            setImageResource(com.lumi.android.R.drawable.lumi_logo)
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(0, 0, 0, 16)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 220))
+        root.addView(TextView(this).apply { text = "Lumi · Agente Asistente de IA"; textSize = 26f })
         root.addView(TextView(this).apply { text = "Voz, acciones Android y conexión opcional con Education."; textSize = 16f; setPadding(0, 12, 0, 20) })
         voiceSpinner = Spinner(this)
         root.addView(voiceSpinner, lp())
