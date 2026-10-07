@@ -4,5 +4,5 @@
     android:sessionService="com.lumi.android.voice.LumiVoiceInteractionSessionService"
     android:recognitionService=""
     android:supportsAssist="true"
-    android:supportsLaunchFromKeyguard="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true"
     android:settingsActivity="com.lumi.android.MainActivity" />
