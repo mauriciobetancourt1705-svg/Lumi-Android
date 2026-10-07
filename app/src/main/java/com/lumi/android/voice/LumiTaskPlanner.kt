@@ -20,14 +20,12 @@ class LumiTaskPlanner(private val messageEngine: LumiMessageEngine) {
     fun plan(text: String): LumiTaskPlan? {
         val normalized = text.trim()
         val parts = normalized.split(
-            Regex("\\s+(?:y luego|después|despues|y después|y despues)\\s+"),
-            limit = 2
+            Regex("\\s+(?:y luego|después|despues|y después|y despues|luego)\\s+")
         )
-        if (parts.size == 2) {
-            val first = planSingle(parts[0])
-            val second = planSingle(parts[1])
-            if (first != null && second != null) {
-                return LumiTaskPlan(normalized, first + second)
+        if (parts.size > 1) {
+            val planned = parts.map { planSingle(it) }
+            if (planned.all { it != null }) {
+                return LumiTaskPlan(normalized, planned.flatMap { it.orEmpty() })
             }
         }
         val single = planSingle(normalized) ?: return null
