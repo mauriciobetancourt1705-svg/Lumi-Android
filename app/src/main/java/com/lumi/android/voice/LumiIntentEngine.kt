@@ -34,7 +34,7 @@ class LumiIntentEngine {
         if (containsAny(normalized, "privacidad", "que permisos tienes", "qué permisos tienes", "que puedes ver", "qué puedes ver")) return LumiIntent.Privacy
         if (containsAny(normalized, "estas activa", "estás activa", "modo autonomia", "modo autonomía")) return LumiIntent.AutonomyStatus
 
-        extractAfter(normalized, listOf("abre ", "abrir ", "quiero abrir ", "quiero abrir la app ", "abre la app ", "abre el app ", "quiero ir a ", "ir a ", "llévame a ", "llevame a ", "ve a ", "ve al "))
+        extractAfter(normalized, listOf("quiero abrir la app ", "quiero abrir el app ", "abre la app ", "abre el app ", "quiero abrir ", "abre ", "abrir ", "quiero ir a ", "ir a ", "llévame a ", "llevame a ", "ve a ", "ve al "))
             ?.takeIf { it.isNotBlank() }
             ?.let { return LumiIntent.OpenApp(it) }
 
