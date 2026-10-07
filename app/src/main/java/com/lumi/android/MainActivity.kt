@@ -99,7 +99,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(educationUrl, lp())
         educationToken = EditText(this).apply {
             hint = "Token Bearer de Education"
-            singleLine = true
+            setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
             setText(educationBridge.config().token)
         }
