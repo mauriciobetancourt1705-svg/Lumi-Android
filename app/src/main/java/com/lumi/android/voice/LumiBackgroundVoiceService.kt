@@ -144,6 +144,7 @@ class LumiBackgroundVoiceService : Service() {
             return
         }
         educationBridge.lumiConversation(raw, memory.recentTurns()) { result ->
+            memory.addTurn("lumi", result)
             android.os.Handler(mainLooper).post { speak(result) }
             educationBridge.syncLumiWellbeingHistory(memory.recentTurns())
         }
