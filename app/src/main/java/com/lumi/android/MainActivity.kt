@@ -156,6 +156,7 @@ class MainActivity : AppCompatActivity() {
             text = if (autonomy.enabled) "Desactivar Lumi 24/7" else "Activar Lumi 24/7"
             setOnClickListener {
                 autonomy.enabled = !autonomy.enabled
+                if (autonomy.enabled) startLumiBackgroundService() else stopLumiBackgroundService()
                 text = if (autonomy.enabled) "Desactivar Lumi 24/7" else "Activar Lumi 24/7"
                 autonomyStatus.text = autonomy.status(this@MainActivity)
             }
@@ -165,6 +166,7 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 if (!autonomy.enabled) autonomy.enabled = true
                 autonomy.backgroundListening = !autonomy.backgroundListening
+                if (autonomy.backgroundListening) startLumiBackgroundService() else stopLumiBackgroundService()
                 text = if (autonomy.backgroundListening) "Desactivar escucha en segundo plano" else "Autorizar escucha en segundo plano"
                 autonomyStatus.text = autonomy.status(this@MainActivity)
             }
@@ -206,6 +208,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply { text = "Programar check-in diario de Lumi"; setOnClickListener { scheduleDailyWellbeingCheckIn(); voiceManager.speak("Listo. Te recordaré una vez al día para saber cómo estás.") } }, lp())
         root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
         androidActionExecutor = com.lumi.android.voice.LumiAndroidActionExecutor(this)
+        memoryStore = LumiMemoryStore(this)
         contextEngine = LumiContextEngine()
         notificationStore = LumiNotificationStore(this)
         messageEngine = LumiMessageEngine()
@@ -273,6 +276,32 @@ class MainActivity : AppCompatActivity() {
         override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
     }
     private fun lp() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 10 }
+    private fun startLumiBackgroundService() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestMicrophone()
+            return
+        }
+        val serviceIntent = Intent(this, com.lumi.android.voice.LumiBackgroundVoiceService::class.java)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                androidx.core.content.ContextCompat.startForegroundService(this, serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+            autonomy.backgroundListening = true
+            autonomyStatus.text = autonomy.status(this)
+        } catch (_: RuntimeException) {
+            autonomy.backgroundListening = false
+            autonomyStatus.text = "Android no permitió iniciar la escucha en segundo plano desde este momento."
+        }
+    }
+
+    private fun stopLumiBackgroundService() {
+        stopService(Intent(this, com.lumi.android.voice.LumiBackgroundVoiceService::class.java))
+        autonomy.backgroundListening = false
+        autonomyStatus.text = autonomy.status(this)
+    }
+
     private fun requestContacts() {
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.READ_CONTACTS), 1002)
     }
