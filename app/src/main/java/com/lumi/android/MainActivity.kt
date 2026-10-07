@@ -609,6 +609,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::voiceSpinner.isInitialized) {
+            voiceManager.onReady { runOnUiThread { updateVoiceList() } }
+        }
+    }
+
     override fun onDestroy() {
         voiceHandler.removeCallbacksAndMessages(null)
         try { speechRecognizer?.destroy() } catch (_: RuntimeException) {}
