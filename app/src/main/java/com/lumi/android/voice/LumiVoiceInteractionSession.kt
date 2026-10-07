@@ -25,6 +25,9 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private val intentEngine = LumiIntentEngine()
     private lateinit var actionExecutor: LumiAndroidActionExecutor
     private lateinit var messageExecutor: LumiMessageActionExecutor
+    private lateinit var memoryStore: LumiMemoryStore
+    private lateinit var taskPlanner: LumiTaskPlanner
+    private lateinit var taskExecutor: LumiTaskExecutor
     private val messageEngine = LumiMessageEngine()
     private var pendingMessage: LumiMessageRequest? = null
     private var pendingContact: LumiContact? = null
@@ -99,7 +102,11 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         root.addView(transcript)
 
         actionExecutor = LumiAndroidActionExecutor(context)
-        messageExecutor = LumiMessageActionExecutor(context, LumiContactResolver(context))
+        val contactResolver = LumiContactResolver(context)
+        messageExecutor = LumiMessageActionExecutor(context, contactResolver)
+        memoryStore = LumiMemoryStore(context)
+        taskPlanner = LumiTaskPlanner(messageEngine)
+        taskExecutor = LumiTaskExecutor(messageExecutor, actionExecutor)
         prepareRecognizer()
         voiceManager = LumiVoiceManager(context)
         handler.postDelayed({ startListening() }, 300L)
@@ -147,7 +154,32 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     private fun handleUserTurn(rawText: String) {
+        memoryStore.addTurn("usuario", rawText)
+
         val normalized = rawText.trim().lowercase()
+        val plan = taskPlanner.plan(rawText)
+        if (plan != null && plan.tasks.size > 1) {
+            val first = plan.tasks.first()
+            if (first is LumiTask.SendMessage) {
+                val (contact, confirmation) = taskExecutor.prepareMessage(first)
+                if (contact == null) {
+                    respond(confirmation)
+                } else {
+                    pendingMessage = first.request
+                    pendingContact = contact
+                    respond("Tengo una tarea de varios pasos. " + confirmation)
+                }
+                return
+            }
+            taskExecutor.execute(first) { result ->
+                if (result.isBlank()) {
+                    respond("Listo. Completé el primer paso.")
+                } else {
+                    respond(result)
+                }
+            }
+            return
+        }
         if (pendingMessage != null && pendingContact != null) {
             if (normalized in setOf("sí", "si", "sí, envíalo", "si envialo", "envíalo", "envialo", "hazlo", "adelante")) {
                 val request = pendingMessage!!
@@ -224,6 +256,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     private fun respond(text: String) {
+        memoryStore.addTurn("lumi", text)
         silenceMode = false
         speaking = true
         listening = false
