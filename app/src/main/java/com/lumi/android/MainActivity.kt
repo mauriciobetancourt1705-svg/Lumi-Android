@@ -397,13 +397,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun scheduleConversationListen(delay: Long) {
-        if (!conversationActive || speaking || listening) return
+        if (!conversationActive || speaking || listening || speechRecognizer == null) return
         voiceHandler.removeCallbacksAndMessages(null)
-        voiceHandler.postDelayed({ startListeningNow() }, delay)
+        val generation = ++listenGeneration
+        listenScheduled = true
+        voiceHandler.postDelayed({
+            if (generation != listenGeneration) { listenScheduled = false; return@postDelayed }
+            listenScheduled = false
+            startListeningNow()
+        }, delay)
     }
 
     private fun startListeningNow() {
-        if (!conversationActive || speaking || listening || speechRecognizer == null) return
+        if (!conversationActive || speaking || listening || speechRecognizer == null || listenScheduled) return
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-VE")
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "es-VE")
