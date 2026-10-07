@@ -59,7 +59,7 @@ class LumiBackgroundVoiceService : Service() {
         }
         active = true
         listen()
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun prepareRecognizer() {
@@ -116,8 +116,7 @@ class LumiBackgroundVoiceService : Service() {
         memory.addTurn("usuario", raw)
         when (val intent = intentEngine.parse(raw)) {
             LumiIntent.Silence -> {
-                speak("Listo. Dejo de escuchar en segundo plano.")
-                active = false
+                speakAndStop("Listo. Dejo de escuchar en segundo plano.")
             }
             LumiIntent.Greeting -> speak("Hola. Aquí estoy contigo.")
             LumiIntent.Thanks -> speak("Siempre.")
@@ -132,6 +131,20 @@ class LumiBackgroundVoiceService : Service() {
                 if (message.isBlank()) listen() else speak(message)
             }
             else -> speak(personality.reply(raw))
+        }
+    }
+
+    private fun speakAndStop(text: String) {
+        if (!active) return
+        speaking = true
+        try { recognizer?.cancel() } catch (_: RuntimeException) {}
+        voice.onReady {
+            voice.speak(
+                text,
+                onStart = {},
+                onDone = { stopSelf() },
+                onError = { stopSelf() }
+            )
         }
     }
 
