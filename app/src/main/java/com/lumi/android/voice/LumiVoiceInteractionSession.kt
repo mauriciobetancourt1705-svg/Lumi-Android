@@ -349,8 +349,12 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             return
         }
         status.text = "Lumi está pensando…"
-        educationBridge.lumiConversation(rawText, memoryStore.recentTurns()) { result ->
-            handler.post { respond(result) }
+        val history = memoryStore.recentTurns()
+        educationBridge.lumiConversation(rawText, history) { result ->
+            handler.post {
+                respond(result)
+                educationBridge.syncLumiWellbeingHistory(memoryStore.recentTurns())
+            }
         }
     }
 
