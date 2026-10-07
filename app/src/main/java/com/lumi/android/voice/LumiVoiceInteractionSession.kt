@@ -26,6 +26,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private lateinit var status: TextView
     private lateinit var transcript: TextView
     private var voiceManager: LumiVoiceManager? = null
+    private var neuralTtsPlayer: LumiNeuralTtsPlayer? = null
     private val intentEngine = LumiIntentEngine()
     private lateinit var actionExecutor: LumiAndroidActionExecutor
     private lateinit var messageExecutor: LumiMessageActionExecutor
@@ -134,6 +135,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         educationBridge = LumiEducationBridge(context)
         prepareRecognizer()
         voiceManager = LumiVoiceManager(context)
+        neuralTtsPlayer = LumiNeuralTtsPlayer(context)
         handler.postDelayed({ startListening() }, 300L)
         return root
     }
@@ -415,26 +417,35 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         try { recognizer?.cancel() } catch (_: RuntimeException) { }
         status.text = "Lumi está hablando…"
         transcript.text = text
-        voiceManager?.speak(
-            text,
-            onStart = { handler.post { status.text = "Lumi está hablando…" } },
-            onDone = {
-                handler.post {
-                    if (speaking) {
-                        speaking = false
-                        status.text = "Lumi está escuchando…"
-                        startListening()
+
+        fun nativeFallback() {
+            voiceManager?.speak(
+                text,
+                onStart = { handler.post { status.text = "Lumi está hablando…" } },
+                onDone = { handler.post { if (speaking) { speaking = false; status.text = "Lumi está escuchando…"; startListening() } } },
+                onError = { handler.post { speaking = false; status.text = "Lumi sigue disponible"; startListening() } }
+            )
+        }
+
+        if (educationBridge.isConfigured()) {
+            educationBridge.lumiTts(
+                text,
+                voiceManager?.educationVoiceId ?: "Gacrux",
+                callback = { audio, mime ->
+                    handler.post {
+                        neuralTtsPlayer?.play(
+                            audio, mime,
+                            onStart = { status.text = "Lumi está hablando…" },
+                            onDone = { if (speaking) { speaking = false; status.text = "Lumi está escuchando…"; startListening() } },
+                            onError = { nativeFallback() }
+                        )
                     }
-                }
-            },
-            onError = {
-                handler.post {
-                    speaking = false
-                    status.text = "Lumi sigue disponible"
-                    startListening()
-                }
-            }
-        )
+                },
+                onError = { handler.post { nativeFallback() } }
+            )
+        } else {
+            nativeFallback()
+        }
     }
 
     private fun stopSpeaking() {
@@ -442,6 +453,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         listenGeneration++
         listenScheduled = false
         voiceManager?.stop()
+        neuralTtsPlayer?.stop()
         speaking = false
         status.text = "Te escucho…"
         handler.post { startListening() }
@@ -453,6 +465,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         super.onHide()
         try { recognizer?.cancel() } catch (_: RuntimeException) { }
         voiceManager?.stop()
+        neuralTtsPlayer?.stop()
         handler.removeCallbacksAndMessages(null)
         listening = false
         speaking = false
@@ -463,6 +476,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         listenScheduled = false
         try { recognizer?.destroy() } catch (_: RuntimeException) { }
         recognizer = null
+        neuralTtsPlayer?.stop()
+        neuralTtsPlayer = null
         voiceManager?.shutdown()
         voiceManager = null
         educationBridge.shutdown()
