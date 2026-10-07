@@ -34,19 +34,6 @@ class LumiVoiceManager(context: Context) : TextToSpeech.OnInitListener {
         get() = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_EDUCATION_VOICE, "Gacrux") ?: "Gacrux"
         set(value) { appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_EDUCATION_VOICE, value).apply() }
 
-    companion object {
-        val EDUCATION_VOICES = listOf(
-            "Gacrux" to "Lumi Serena",
-            "Sulafat" to "Lumi Cálida",
-            "Vindemiatrix" to "Lumi Suave",
-            "Achird" to "Lumi Amigable",
-            "Kore" to "Lumi Firme",
-            "Charon" to "Lumi Informativa",
-            "Aoede" to "Lumi Breezy",
-            "Schedar" to "Lumi Equilibrada"
-        )
-    }
-
     var speechRate: Float
         get() = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getFloat(KEY_RATE, 1.0f)
         set(value) { appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putFloat(KEY_RATE, value).apply() }
@@ -156,6 +143,17 @@ class LumiVoiceManager(context: Context) : TextToSpeech.OnInitListener {
     }
 
     companion object {
+        val EDUCATION_VOICES = listOf(
+            "Gacrux" to "Lumi Serena",
+            "Sulafat" to "Lumi Cálida",
+            "Vindemiatrix" to "Lumi Suave",
+            "Achird" to "Lumi Amigable",
+            "Kore" to "Lumi Firme",
+            "Charon" to "Lumi Informativa",
+            "Aoede" to "Lumi Breezy",
+            "Schedar" to "Lumi Equilibrada"
+        )
+
         private const val PREFS = "lumi_voice_preferences"
         private const val KEY_VOICE = "voice_name"
         private const val KEY_PITCH = "pitch"
