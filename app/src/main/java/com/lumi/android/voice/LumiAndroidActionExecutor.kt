@@ -16,6 +16,7 @@ class LumiAndroidActionExecutor(private val context: Context) {
         when (intent) {
             is LumiIntent.OpenApp -> openApp(intent.query, onResult)
             is LumiIntent.WebSearch -> webSearch(intent.query, onResult)
+            is LumiIntent.PlayContent -> playContent(intent.query, onResult)
             LumiIntent.OpenSettings -> openSettings(onResult)
             LumiIntent.VolumeUp -> changeVolume(AudioManager.ADJUST_RAISE, onResult)
             LumiIntent.VolumeDown -> changeVolume(AudioManager.ADJUST_LOWER, onResult)
@@ -65,6 +66,21 @@ class LumiAndroidActionExecutor(private val context: Context) {
             onResult("Listo. Buscando " + query + ".", true)
         } catch (_: RuntimeException) {
             onResult("No pude abrir el buscador.", false)
+        }
+    }
+
+    private fun playContent(query: String, onResult: (String, Boolean) -> Unit) {
+        if (query.isBlank()) {
+            onResult("Dime qué quieres que reproduzca.", false)
+            return
+        }
+        val youtubeUrl = "https://www.youtube.com/results?search_query=" + Uri.encode(query)
+        val youtubeIntent = Intent(Intent.ACTION_VIEW, Uri.parse(youtubeUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(youtubeIntent)
+            onResult("Listo. Buscando " + query + " en YouTube.", true)
+        } catch (_: RuntimeException) {
+            webSearch(query, onResult)
         }
     }
 
