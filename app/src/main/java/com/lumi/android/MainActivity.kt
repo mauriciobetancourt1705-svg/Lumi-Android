@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     startActivity(Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
                 } catch (_: android.content.ActivityNotFoundException) {
-                    startActivity(Intent(android.provider.Settings.ACTION_TEXT_TO_SPEECH_SETTINGS))
+                    voiceStatus.text = "El motor TTS no ofrece un instalador en este teléfono."
                 }
             }
         }, lp())
@@ -400,7 +400,7 @@ class MainActivity : AppCompatActivity() {
                     educationBridge.tutor(educationIntent.text) { result -> runOnUiThread { speakInApp(result) } }
                 is com.lumi.android.voice.LumiEducationIntent.Oraculo ->
                     educationBridge.oraculo(educationIntent.text) { result -> runOnUiThread { speakInApp(result) } }
-                LumiEducationIntent.BcvRate ->
+                com.lumi.android.voice.LumiEducationIntent.BcvRate ->
                     educationBridge.bcvRate { result -> runOnUiThread { speakInApp(result) } }
             }
             return
