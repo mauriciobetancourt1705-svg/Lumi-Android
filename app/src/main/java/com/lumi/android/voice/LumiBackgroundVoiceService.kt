@@ -22,6 +22,7 @@ class LumiBackgroundVoiceService : Service() {
     private lateinit var actionExecutor: LumiAndroidActionExecutor
     private val intentEngine = LumiIntentEngine()
     private lateinit var memory: LumiMemoryStore
+    private lateinit var educationBridge: LumiEducationBridge
     private val personality = com.lumi.android.wellbeing.LumiPersonalityEngine()
     private var active = false
     private var speaking = false
@@ -49,6 +50,7 @@ class LumiBackgroundVoiceService : Service() {
         voice = LumiVoiceManager(this)
         actionExecutor = LumiAndroidActionExecutor(this)
         memory = LumiMemoryStore(this)
+        educationBridge = LumiEducationBridge(this)
         prepareRecognizer()
     }
 
@@ -118,8 +120,8 @@ class LumiBackgroundVoiceService : Service() {
             LumiIntent.Silence -> {
                 speakAndStop("Listo. Dejo de escuchar en segundo plano.")
             }
-            LumiIntent.Greeting -> speak("Hola. Aquí estoy contigo.")
-            LumiIntent.Thanks -> speak("Siempre.")
+            LumiIntent.Greeting -> askEducationLumi(raw)
+            LumiIntent.Thanks -> askEducationLumi(raw)
             LumiIntent.Status -> speak(personality.greeting(moment = com.lumi.android.wellbeing.LumiPersonalityEngine.Moment.CHECK_IN))
             is LumiIntent.OpenApp,
             is LumiIntent.WebSearch,
@@ -130,7 +132,17 @@ class LumiBackgroundVoiceService : Service() {
             LumiIntent.PlayPause -> actionExecutor.execute(intent) { message, _ ->
                 if (message.isBlank()) listen() else speak(message)
             }
-            else -> speak(personality.reply(raw))
+            else -> askEducationLumi(raw)
+        }
+    }
+
+    private fun askEducationLumi(raw: String) {
+        if (!educationBridge.isConfigured()) {
+            speak(personality.reply(raw))
+            return
+        }
+        educationBridge.lumiConversation(raw, memory.recentTurns()) { result ->
+            android.os.Handler(mainLooper).post { speak(result) }
         }
     }
 
@@ -173,6 +185,7 @@ class LumiBackgroundVoiceService : Service() {
         try { recognizer?.cancel(); recognizer?.destroy() } catch (_: RuntimeException) {}
         recognizer = null
         if (::voice.isInitialized) voice.shutdown()
+        if (::educationBridge.isInitialized) educationBridge.shutdown()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
