@@ -4,11 +4,13 @@ import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.lumi.android.voice.LumiEducationBridge
 import com.lumi.android.voice.LumiVoiceManager
 
 class MainActivity : AppCompatActivity() {
@@ -16,13 +18,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var voiceSpinner: Spinner
     private lateinit var pitchValue: TextView
     private lateinit var rateValue: TextView
+    private lateinit var educationBridge: LumiEducationBridge
+    private lateinit var educationStatus: TextView
+    private lateinit var educationUrl: EditText
+    private lateinit var educationToken: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         voiceManager = LumiVoiceManager(this)
+        educationBridge = LumiEducationBridge(this)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 42, 32, 32) }
         root.addView(TextView(this).apply { text = "Lumi Android · Voz"; textSize = 26f })
-        root.addView(TextView(this).apply { text = "Elige la voz que más te guste. Las opciones dependen de las voces instaladas en tu Android."; textSize = 16f; setPadding(0, 12, 0, 20) })
+        root.addView(TextView(this).apply { text = "Voz, acciones Android y conexión opcional con Education."; textSize = 16f; setPadding(0, 12, 0, 20) })
         voiceSpinner = Spinner(this)
         root.addView(voiceSpinner, lp())
         pitchValue = TextView(this).apply { textSize = 15f }
@@ -44,6 +51,37 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply { text = "Conceder acceso a contactos"; setOnClickListener { requestContacts() } }, lp())
         root.addView(Button(this).apply { text = "Conceder notificaciones"; setOnClickListener { requestNotifications() } }, lp())
         root.addView(Button(this).apply { text = "Activar acceso contextual"; setOnClickListener { startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) } }, lp())
+        root.addView(TextView(this).apply { text = "Conexión con Education"; textSize = 21f; setPadding(0, 28, 0, 8) })
+        educationUrl = EditText(this).apply {
+            hint = "URL de Education (https://...)"
+            singleLine = true
+            setText(educationBridge.config().baseUrl)
+        }
+        root.addView(educationUrl, lp())
+        educationToken = EditText(this).apply {
+            hint = "Token Bearer de Education"
+            singleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setText(educationBridge.config().token)
+        }
+        root.addView(educationToken, lp())
+        educationStatus = TextView(this).apply { text = "Education: sin configurar"; textSize = 14f; setPadding(0, 8, 0, 4) }
+        root.addView(educationStatus)
+        root.addView(Button(this).apply {
+            text = "Guardar conexión"
+            setOnClickListener {
+                educationBridge.saveConfig(educationUrl.text.toString(), educationToken.text.toString())
+                educationStatus.text = "Education: configuración guardada"
+            }
+        }, lp())
+        root.addView(Button(this).apply {
+            text = "Probar conexión con Education"
+            setOnClickListener {
+                educationBridge.saveConfig(educationUrl.text.toString(), educationToken.text.toString())
+                educationStatus.text = "Education: comprobando…"
+                educationBridge.health { result -> runOnUiThread { educationStatus.text = "Education: $result" } }
+            }
+        }, lp())
         root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
         setContentView(root)
         updateVoiceList()
@@ -80,5 +118,9 @@ class MainActivity : AppCompatActivity() {
     private fun requestMicrophone() {
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
     }
-    override fun onDestroy() { voiceManager.shutdown(); super.onDestroy() }
+    override fun onDestroy() {
+        educationBridge.shutdown()
+        voiceManager.shutdown()
+        super.onDestroy()
+    }
 }
