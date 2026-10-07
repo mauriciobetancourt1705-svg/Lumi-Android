@@ -21,6 +21,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private var listening = false
     private var speaking = false
     private var silenceMode = false
+    private var listenGeneration = 0L
+    private var listenScheduled = false
     private lateinit var status: TextView
     private lateinit var transcript: TextView
     private var voiceManager: LumiVoiceManager? = null
@@ -156,7 +158,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     private fun startListening() {
-        if (silenceMode || listening || recognizer == null || speaking) return
+        if (silenceMode || listening || recognizer == null || speaking || listenScheduled) return
+        listenScheduled = false
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, venezuelanLocale.toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, venezuelanLocale.toLanguageTag())
@@ -175,7 +178,14 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     private fun scheduleListen(delay: Long = 450L) {
-        if (!silenceMode && !speaking) handler.postDelayed({ startListening() }, delay)
+        if (silenceMode || speaking || listening || recognizer == null) return
+        val generation = ++listenGeneration
+        listenScheduled = true
+        handler.postDelayed({
+            if (generation != listenGeneration) { listenScheduled = false; return@postDelayed }
+            listenScheduled = false
+            startListening()
+        }, delay)
     }
 
     private fun handleUserTurn(rawText: String) {
@@ -429,6 +439,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
 
     private fun stopSpeaking() {
         if (!speaking) return
+        listenGeneration++
+        listenScheduled = false
         voiceManager?.stop()
         speaking = false
         status.text = "Te escucho…"
@@ -436,6 +448,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     override fun onHide() {
+        listenGeneration++
+        listenScheduled = false
         super.onHide()
         try { recognizer?.cancel() } catch (_: RuntimeException) { }
         voiceManager?.stop()
@@ -445,6 +459,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     }
 
     override fun onDestroy() {
+        listenGeneration++
+        listenScheduled = false
         try { recognizer?.destroy() } catch (_: RuntimeException) { }
         recognizer = null
         voiceManager?.shutdown()
