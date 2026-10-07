@@ -31,9 +31,13 @@ class LumiIntentEngine {
         if (containsAny(normalized, "gracias", "muchas gracias")) return LumiIntent.Thanks
         if (containsAny(normalized, "como estas", "cómo estas", "cómo estás", "como te sientes")) return LumiIntent.Status
 
-        extractAfter(normalized, listOf("abre ", "abrir ", "abre la app ", "abre el app "))
+        extractAfter(normalized, listOf("abre ", "abrir ", "abre la app ", "abre el app ", "quiero ir a ", "ir a ", "llévame a ", "llevame a "))
             ?.takeIf { it.isNotBlank() }
             ?.let { return LumiIntent.OpenApp(it) }
+
+        extractAfter(normalized, listOf("ponme ", "pon ", "reproduce ", "reproduceme ", "reprodúceme ", "quiero escuchar "))
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return LumiIntent.PlayContent(it) }
 
         extractAfter(normalized, listOf("busca en internet ", "busca en google ", "google ", "busca "))
             ?.takeIf { it.isNotBlank() }
@@ -57,4 +61,5 @@ class LumiIntentEngine {
     private fun normalize(value: String): String =
         Normalizer.normalize(value.trim().lowercase(locale), Normalizer.Form.NFD)
             .replace("\\p{M}+".toRegex(), "")
+
 }
