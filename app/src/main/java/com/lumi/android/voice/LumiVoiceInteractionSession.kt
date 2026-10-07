@@ -30,6 +30,10 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private lateinit var taskExecutor: LumiTaskExecutor
     private lateinit var agendaExecutor: LumiAgendaActionExecutor
     private lateinit var emailExecutor: LumiEmailActionExecutor
+    private lateinit var agentEngine: LumiAgentEngine
+    private lateinit var agentExecutor: LumiAgentExecutor
+    private var pendingAgentTasks: MutableList<LumiTask> = mutableListOf()
+    private var pendingAgentIndex = 0
     private lateinit var notificationStore: LumiNotificationStore
     private val contextEngine = LumiContextEngine()
     private val agendaEngine = LumiAgendaEngine()
@@ -118,6 +122,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         agendaExecutor = LumiAgendaActionExecutor(context)
         emailExecutor = LumiEmailActionExecutor(context)
         notificationStore = LumiNotificationStore(context)
+        agentEngine = LumiAgentEngine(taskPlanner)
+        agentExecutor = LumiAgentExecutor(taskExecutor, messageExecutor, contactResolver)
         prepareRecognizer()
         voiceManager = LumiVoiceManager(context)
         handler.postDelayed({ startListening() }, 300L)
@@ -168,27 +174,11 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         memoryStore.addTurn("usuario", rawText)
 
         val normalized = rawText.trim().lowercase()
-        val plan = taskPlanner.plan(rawText)
-        if (plan != null && plan.tasks.size > 1) {
-            val first = plan.tasks.first()
-            if (first is LumiTask.SendMessage) {
-                val (contact, confirmation) = taskExecutor.prepareMessage(first)
-                if (contact == null) {
-                    respond(confirmation)
-                } else {
-                    pendingMessage = first.request
-                    pendingContact = contact
-                    respond("Tengo una tarea de varios pasos. " + confirmation)
-                }
-                return
-            }
-            taskExecutor.execute(first) { result ->
-                if (result.isBlank()) {
-                    respond("Listo. Completé el primer paso.")
-                } else {
-                    respond(result)
-                }
-            }
+        val agentPlan = agentEngine.plan(rawText)
+        if (agentPlan != null && agentPlan.tasks.size > 1) {
+            pendingAgentTasks = agentPlan.tasks.toMutableList()
+            pendingAgentIndex = 0
+            executeNextAgentTask()
             return
         }
         val contextIntent = contextEngine.parse(rawText)
@@ -241,7 +231,14 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
                 val contact = pendingContact!!
                 pendingMessage = null
                 pendingContact = null
-                respond(messageExecutor.send(request, contact))
+                val result = messageExecutor.send(request, contact)
+                if (pendingAgentTasks.isNotEmpty()) {
+                    pendingAgentIndex++
+                    respond(result + " Continúo con el siguiente paso.")
+                    handler.postDelayed({ executeNextAgentTask() }, 250L)
+                } else {
+                    respond(result)
+                }
                 return
             }
             if (normalized in setOf("no", "cancelar", "cancela", "no lo envíes", "no lo envies")) {
@@ -304,6 +301,42 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             LumiIntent.VolumeDown,
             LumiIntent.PlayPause -> executeAndroidAction(intent)
             is LumiIntent.Conversation -> respond("Te escucho. " + rawText.trim())
+        }
+    }
+
+    private fun executeNextAgentTask() {
+        if (pendingAgentIndex >= pendingAgentTasks.size) {
+            val total = pendingAgentTasks.size
+            pendingAgentTasks.clear()
+            pendingAgentIndex = 0
+            respond("Listo. Completé los $total pasos de la tarea.")
+            return
+        }
+        when (val task = pendingAgentTasks[pendingAgentIndex]) {
+            is LumiTask.SendMessage -> {
+                val (contact, confirmation) = agentExecutor.prepareMessage(task)
+                if (contact == null) {
+                    pendingAgentTasks.clear()
+                    pendingAgentIndex = 0
+                    respond(confirmation)
+                    return
+                }
+                pendingMessage = task.request
+                pendingContact = contact
+                respond("Paso " + (pendingAgentIndex + 1) + ": " + confirmation + " ¿Lo envío?")
+            }
+            else -> {
+                agentExecutor.executeNonMessage(task) { result ->
+                    handler.post {
+                        pendingAgentIndex++
+                        if (result.isNotBlank()) {
+                            respond(result)
+                        } else {
+                            executeNextAgentTask()
+                        }
+                    }
+                }
+            }
         }
     }
 
