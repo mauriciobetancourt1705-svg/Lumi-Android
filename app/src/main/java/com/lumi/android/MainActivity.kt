@@ -548,9 +548,9 @@ class MainActivity : AppCompatActivity() {
                 voiceStatus.text = "Lumi está en silencio."
             }
             LumiIntent.Resume -> speakInApp("Claro. Aquí estoy. Te escucho.")
-            LumiIntent.Greeting -> speakInApp("Hola. Aquí estoy contigo.")
-            LumiIntent.Thanks -> speakInApp("Siempre.")
-            LumiIntent.Status -> speakInApp(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
+            LumiIntent.Greeting -> askEducationLumiInApp(rawText)
+            LumiIntent.Thanks -> askEducationLumiInApp(rawText)
+            LumiIntent.Status -> askEducationLumiInApp(rawText)
             LumiIntent.AutonomyStatus -> speakInApp(autonomy.status(this))
             LumiIntent.Privacy -> speakInApp(autonomy.privacySummary())
             is LumiIntent.OpenApp,
