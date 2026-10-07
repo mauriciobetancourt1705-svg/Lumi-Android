@@ -28,9 +28,12 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private lateinit var memoryStore: LumiMemoryStore
     private lateinit var taskPlanner: LumiTaskPlanner
     private lateinit var taskExecutor: LumiTaskExecutor
+    private lateinit var agendaExecutor: LumiAgendaActionExecutor
+    private val agendaEngine = LumiAgendaEngine()
     private val messageEngine = LumiMessageEngine()
     private var pendingMessage: LumiMessageRequest? = null
     private var pendingContact: LumiContact? = null
+    private var pendingAgenda: LumiAgendaRequest? = null
     private val venezuelanLocale = Locale("es", "VE")
 
     private val listener = object : RecognitionListener {
@@ -107,6 +110,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         memoryStore = LumiMemoryStore(context)
         taskPlanner = LumiTaskPlanner(messageEngine)
         taskExecutor = LumiTaskExecutor(messageExecutor, actionExecutor)
+        agendaExecutor = LumiAgendaActionExecutor(context)
         prepareRecognizer()
         voiceManager = LumiVoiceManager(context)
         handler.postDelayed({ startListening() }, 300L)
@@ -180,6 +184,24 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             }
             return
         }
+        if (pendingAgenda != null) {
+            if (normalized in setOf("sí", "si", "sí, hazlo", "si hazlo", "hazlo", "adelante", "confirmo", "confirma")) {
+                val request = pendingAgenda!!
+                pendingAgenda = null
+                if (request.type == LumiAgendaRequest.Type.REMINDER) {
+                    respond(agendaExecutor.createReminder(request))
+                } else {
+                    respond(agendaExecutor.openCalendar(request))
+                }
+                return
+            }
+            if (normalized in setOf("no", "cancelar", "cancela", "no lo hagas")) {
+                pendingAgenda = null
+                respond("Listo, no creé el recordatorio ni el evento.")
+                return
+            }
+        }
+
         if (pendingMessage != null && pendingContact != null) {
             if (normalized in setOf("sí", "si", "sí, envíalo", "si envialo", "envíalo", "envialo", "hazlo", "adelante")) {
                 val request = pendingMessage!!
@@ -195,6 +217,14 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
                 respond("Listo, no envié nada.")
                 return
             }
+        }
+
+        val agendaRequest = agendaEngine.parse(rawText)
+        if (agendaRequest != null) {
+            silenceMode = false
+            pendingAgenda = agendaRequest
+            respond(agendaExecutor.prepare(agendaRequest) + " ¿Quieres que lo haga?")
+            return
         }
 
         val messageRequest = messageEngine.parse(rawText)
