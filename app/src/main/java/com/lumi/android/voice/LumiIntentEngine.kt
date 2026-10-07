@@ -30,13 +30,15 @@ class LumiIntentEngine {
         if (containsAny(normalized, "callate", "cállate", "silencio", "espera")) return LumiIntent.Silence
         if (containsAny(normalized, "sigue", "continua", "continúa", "despierta")) return LumiIntent.Resume
         if (containsAny(normalized, "gracias", "muchas gracias")) return LumiIntent.Thanks
-        if (containsAny(normalized, "como estas", "cómo estas", "cómo estás", "como te sientes")) return LumiIntent.Status
+        if (containsAny(normalized, "como estas", "cómo estas", "cómo estás", "como te sientes", "estas bien", "estás bien")) return LumiIntent.Status
+        if (containsAny(normalized, "privacidad", "que permisos tienes", "qué permisos tienes", "que puedes ver", "qué puedes ver")) return LumiIntent.Privacy
+        if (containsAny(normalized, "estas activa", "estás activa", "modo autonomia", "modo autonomía")) return LumiIntent.AutonomyStatus
 
         extractAfter(normalized, listOf("abre ", "abrir ", "quiero abrir ", "quiero abrir la app ", "abre la app ", "abre el app ", "quiero ir a ", "ir a ", "llévame a ", "llevame a ", "ve a ", "ve al "))
             ?.takeIf { it.isNotBlank() }
             ?.let { return LumiIntent.OpenApp(it) }
 
-        extractAfter(normalized, listOf("ponme ", "pon ", "reproduce ", "reproduceme ", "reprodúceme ", "quiero escuchar "))
+        extractAfter(normalized, listOf("ponme ", "pon ", "reproduce ", "reproduceme ", "reprodúceme ", "quiero escuchar ", "quiero oír ", "quiero oir ", "escucha ", "pon a sonar "))
             ?.takeIf { it.isNotBlank() }
             ?.let { return LumiIntent.PlayContent(it) }
 
