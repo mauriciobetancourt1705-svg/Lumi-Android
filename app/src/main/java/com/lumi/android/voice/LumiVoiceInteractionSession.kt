@@ -311,6 +311,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             LumiIntent.Status -> respond(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
             is LumiIntent.OpenApp,
             is LumiIntent.WebSearch,
+            is LumiIntent.PlayContent,
             LumiIntent.OpenSettings,
             LumiIntent.VolumeUp,
             LumiIntent.VolumeDown,
