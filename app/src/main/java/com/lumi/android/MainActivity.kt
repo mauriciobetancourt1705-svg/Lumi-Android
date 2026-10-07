@@ -1,6 +1,12 @@
 package com.lumi.android
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.Build
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Intent
@@ -31,6 +37,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var educationToken: EditText
     private lateinit var autonomy: LumiAutonomyController
     private lateinit var autonomyStatus: TextView
+    private lateinit var voiceStatus: TextView
+    private lateinit var voiceTranscript: TextView
+    private var speechRecognizer: SpeechRecognizer? = null
+    private val voiceHandler = Handler(Looper.getMainLooper())
+    private var conversationActive = false
+    private var listening = false
+    private var speaking = false
+    private val personality = LumiPersonalityEngine()
+    private val intentEngine = com.lumi.android.voice.LumiIntentEngine()
+    private lateinit var androidActionExecutor: com.lumi.android.voice.LumiAndroidActionExecutor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,10 +81,25 @@ class MainActivity : AppCompatActivity() {
             setOnSeekBarChangeListener(seekListener { value -> voiceManager.speechRate = 0.5f + value / 100f; updateLabels() })
         }, lp())
         root.addView(Button(this).apply { text = "Probar voz de Lumi"; setOnClickListener { voiceManager.speak("Hola, soy Lumi. Esta es la voz que has elegido.") } }, lp())
-        root.addView(Button(this).apply { text = "Conceder micrófono"; setOnClickListener { requestMicrophone() } }, lp())
-        root.addView(Button(this).apply { text = "Conceder acceso a contactos"; setOnClickListener { requestContacts() } }, lp())
-        root.addView(Button(this).apply { text = "Conceder notificaciones"; setOnClickListener { requestNotifications() } }, lp())
-        root.addView(Button(this).apply { text = "Activar acceso contextual"; setOnClickListener { startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) } }, lp())
+        voiceStatus = TextView(this).apply {
+            text = "Lumi está lista para escucharte."
+            textSize = 15f
+            setPadding(0, 18, 0, 4)
+        }
+        root.addView(voiceStatus)
+        voiceTranscript = TextView(this).apply {
+            text = "Pulsa «Hablar con Lumi» y dime algo."
+            textSize = 16f
+            setPadding(0, 4, 0, 12)
+        }
+        root.addView(voiceTranscript)
+        root.addView(Button(this).apply {
+            text = "HABLAR CON LUMI"
+            setOnClickListener { toggleConversation() }
+        }, lp())
+        root.addView(Button(this).apply { text = "Permiso opcional: contactos"; setOnClickListener { requestContacts() } }, lp())
+        root.addView(Button(this).apply { text = "Permiso opcional: notificaciones"; setOnClickListener { requestNotifications() } }, lp())
+        root.addView(Button(this).apply { text = "Permiso opcional: contexto y notificaciones"; setOnClickListener { startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) } }, lp())
         root.addView(TextView(this).apply { text = "Lumi 24/7 · Seguridad y autonomía"; textSize = 21f; setPadding(0, 28, 0, 8) })
         autonomyStatus = TextView(this).apply { textSize = 14f; text = autonomy.status(this@MainActivity) }
         root.addView(autonomyStatus)
@@ -125,6 +156,8 @@ class MainActivity : AppCompatActivity() {
         root.addView(TextView(this).apply { text = "Lumi puede acercarse una vez al día para preguntarte cómo estás. Tú decides cuándo y puedes ignorar el aviso."; textSize = 14f; setPadding(0, 0, 0, 8) })
         root.addView(Button(this).apply { text = "Programar check-in diario de Lumi"; setOnClickListener { scheduleDailyWellbeingCheckIn(); voiceManager.speak("Listo. Te recordaré una vez al día para saber cómo estás.") } }, lp())
         root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
+        androidActionExecutor = com.lumi.android.voice.LumiAndroidActionExecutor(this)
+        prepareInAppRecognizer()
         setContentView(root)
         if (intent?.action == "com.lumi.android.CHECK_IN") {
             root.postDelayed({ voiceManager.speak(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN)) }, 350L)
@@ -176,9 +209,225 @@ class MainActivity : AppCompatActivity() {
         if (android.os.Build.VERSION.SDK_INT >= 33 && androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1003)
     }
     private fun requestMicrophone() {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
+        } else {
+            startConversation()
+        }
     }
+
+    private fun toggleConversation() {
+        if (conversationActive) {
+            stopConversation()
+            return
+        }
+        requestMicrophone()
+    }
+
+    private fun prepareInAppRecognizer() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            voiceStatus = voiceStatus.takeIf { ::voiceStatus.isInitialized } ?: TextView(this)
+            return
+        }
+        speechRecognizer = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(this)
+            }
+        } catch (_: RuntimeException) {
+            SpeechRecognizer.createSpeechRecognizer(this)
+        }
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                listening = true
+                voiceStatus.text = "Lumi está escuchando…"
+            }
+            override fun onBeginningOfSpeech() {
+                voiceStatus.text = "Te escucho…"
+            }
+            override fun onRmsChanged(rmsdB: Float) = Unit
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onPartialResults(results: Bundle?) {
+                val partial = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (!partial.isNullOrBlank()) voiceTranscript.text = partial
+            }
+            override fun onResults(results: Bundle?) {
+                listening = false
+                val spoken = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()?.trim().orEmpty()
+                if (spoken.isBlank()) {
+                    voiceStatus.text = "No alcancé a entenderte. Te escucho de nuevo…"
+                    scheduleConversationListen(500L)
+                    return
+                }
+                voiceTranscript.text = spoken
+                handleInAppCommand(spoken)
+            }
+            override fun onEndOfSpeech() {
+                listening = false
+                if (!speaking) voiceStatus.text = "Procesando…"
+            }
+            override fun onError(error: Int) {
+                listening = false
+                if (conversationActive && !speaking) {
+                    voiceStatus.text = "No pude escucharte. Te vuelvo a escuchar…"
+                    scheduleConversationListen(700L)
+                }
+            }
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        })
+    }
+
+    private fun startConversation() {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
+            return
+        }
+        if (speechRecognizer == null) {
+            prepareInAppRecognizer()
+        }
+        conversationActive = true
+        voiceStatus.text = "Preparando el micrófono…"
+        scheduleConversationListen(150L)
+    }
+
+    private fun scheduleConversationListen(delay: Long) {
+        if (!conversationActive || speaking || listening) return
+        voiceHandler.removeCallbacksAndMessages(null)
+        voiceHandler.postDelayed({ startListeningNow() }, delay)
+    }
+
+    private fun startListeningNow() {
+        if (!conversationActive || speaking || listening || speechRecognizer == null) return
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-VE")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "es-VE")
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2200L)
+        }
+        try {
+            voiceStatus.text = "Lumi está escuchando…"
+            speechRecognizer?.startListening(intent)
+        } catch (_: RuntimeException) {
+            voiceStatus.text = "No pude iniciar el micrófono. Reintenta."
+            scheduleConversationListen(1000L)
+        }
+    }
+
+    private fun handleInAppCommand(rawText: String) {
+        val educationIntent = educationBridge.let { com.lumi.android.voice.LumiEducationIntentEngine().parse(rawText) }
+        if (educationIntent != null) {
+            when (educationIntent) {
+                is com.lumi.android.voice.LumiEducationIntent.Tutor ->
+                    educationBridge.tutor(educationIntent.text) { result -> runOnUiThread { speakInApp(result) } }
+                is com.lumi.android.voice.LumiEducationIntent.Oraculo ->
+                    educationBridge.oraculo(educationIntent.text) { result -> runOnUiThread { speakInApp(result) } }
+                com.lumi.android.voice.LumiEducationIntent.BcvRate ->
+                    educationBridge.bcvRate { result -> runOnUiThread { speakInApp(result) } }
+            }
+            return
+        }
+
+        when (val intent = intentEngine.parse(rawText)) {
+            com.lumi.android.voice.LumiIntent.Silence -> {
+                conversationActive = false
+                try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
+                voiceStatus.text = "Lumi está en silencio."
+            }
+            com.lumi.android.voice.LumiIntent.Resume ->
+                speakInApp("Claro. Aquí estoy. Te escucho.")
+            com.lumi.android.voice.LumiIntent.Greeting ->
+                speakInApp("Hola. Aquí estoy contigo.")
+            com.lumi.android.voice.LumiIntent.Thanks ->
+                speakInApp("Siempre.")
+            com.lumi.android.voice.LumiIntent.Status ->
+                speakInApp(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
+            is com.lumi.android.voice.LumiIntent.OpenApp,
+            is com.lumi.android.voice.LumiIntent.WebSearch,
+            com.lumi.android.voice.LumiIntent.OpenSettings,
+            com.lumi.android.voice.LumiIntent.VolumeUp,
+            com.lumi.android.voice.LumiIntent.VolumeDown,
+            com.lumi.android.voice.LumiIntent.PlayPause -> {
+                try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
+                androidActionExecutor.execute(intent) { message, _ ->
+                    runOnUiThread {
+                        if (message.isBlank()) {
+                            scheduleConversationListen(300L)
+                        } else {
+                            speakInApp(message)
+                        }
+                    }
+                }
+            }
+            else -> speakInApp(personality.reply(rawText))
+        }
+    }
+
+    private fun speakInApp(text: String) {
+        if (!conversationActive) return
+        speaking = true
+        listening = false
+        try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
+        voiceStatus.text = "Lumi está hablando…"
+        voiceTranscript.text = text
+        voiceManager.speak(
+            text,
+            onStart = { runOnUiThread { voiceStatus.text = "Lumi está hablando…" } },
+            onDone = {
+                runOnUiThread {
+                    speaking = false
+                    if (conversationActive) {
+                        voiceStatus.text = "Lumi está escuchando…"
+                        scheduleConversationListen(300L)
+                    }
+                }
+            },
+            onError = {
+                runOnUiThread {
+                    speaking = false
+                    if (conversationActive) {
+                        voiceStatus.text = "Lumi sigue disponible."
+                        scheduleConversationListen(500L)
+                    }
+                }
+            }
+        )
+    }
+
+    private fun stopConversation() {
+        conversationActive = false
+        speaking = false
+        listening = false
+        voiceHandler.removeCallbacksAndMessages(null)
+        try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
+        voiceManager.stop()
+        voiceStatus.text = "Lumi está en espera."
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001) {
+            if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                startConversation()
+            } else {
+                voiceStatus.text = "Necesito permiso de micrófono para escucharte."
+            }
+        }
+    }
+
     override fun onDestroy() {
+        voiceHandler.removeCallbacksAndMessages(null)
+        try { speechRecognizer?.destroy() } catch (_: RuntimeException) {}
+        speechRecognizer = null
+        educationBridge.shutdown()
+        voiceManager.shutdown()
+        super.onDestroy()
+    }
         educationBridge.shutdown()
         voiceManager.shutdown()
         super.onDestroy()
