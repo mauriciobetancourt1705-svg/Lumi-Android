@@ -35,6 +35,39 @@ class LumiEducationBridge(context: Context) {
         request("GET", "/api/v1/health", null, false, callback) { callback("Education está conectado.") }
     }
 
+    fun validateSession(callback: (Boolean, String) -> Unit) {
+        request("GET", "/api/v1/me", null, true, { callback(false, it) }) { json ->
+            val user = json.optJSONObject("user")
+            val name = user?.optString("name").orEmpty()
+            callback(true, if (name.isBlank()) "Sesión de Education válida." else "Sesión de Education válida: $name")
+        }
+    }
+
+    fun syncLumiWellbeingHistory(history: List<LumiTurn>, callback: ((Boolean) -> Unit)? = null) {
+        if (!isConfigured()) { callback?.invoke(false); return }
+        request("GET", "/api/v1/me", null, true, { callback?.invoke(false) }) { me ->
+            try {
+                val user = me.optJSONObject("user") ?: run { callback?.invoke(false); return@request }
+                val state = user.optJSONObject("state") ?: JSONObject()
+                val wellbeing = state.optJSONObject("wellbeing") ?: JSONObject()
+                val messages = JSONArray().apply {
+                    history.takeLast(40).forEach { turn ->
+                        put(JSONObject().apply {
+                            put("role", if (turn.role == "lumi" || turn.role == "model") "model" else "user")
+                            put("text", turn.text.take(3000))
+                        })
+                    }
+                }
+                wellbeing.put("messages", messages)
+                wellbeing.put("checkins", wellbeing.optJSONArray("checkins") ?: JSONArray())
+                state.put("wellbeing", wellbeing)
+                request("PUT", "/api/v1/me/state", JSONObject().put("state", state), true, { callback?.invoke(false) }) {
+                    callback?.invoke(true)
+                }
+            } catch (_: Exception) { callback?.invoke(false) }
+        }
+    }
+
     /**
      * Envía la conversación al MISMO cerebro de Lumi que utiliza Education.
      * Android aporta voz y acciones; no recrea localmente la personalidad de Lumi.
