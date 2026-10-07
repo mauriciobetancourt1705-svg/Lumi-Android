@@ -428,8 +428,4 @@ class MainActivity : AppCompatActivity() {
         voiceManager.shutdown()
         super.onDestroy()
     }
-        educationBridge.shutdown()
-        voiceManager.shutdown()
-        super.onDestroy()
-    }
 }
