@@ -32,6 +32,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private lateinit var emailExecutor: LumiEmailActionExecutor
     private lateinit var agentEngine: LumiAgentEngine
     private lateinit var agentExecutor: LumiAgentExecutor
+    private lateinit var educationBridge: LumiEducationBridge
+    private val educationIntentEngine = LumiEducationIntentEngine()
     private var pendingAgentTasks: MutableList<LumiTask> = mutableListOf()
     private var pendingAgentIndex = 0
     private lateinit var notificationStore: LumiNotificationStore
@@ -124,6 +126,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         notificationStore = LumiNotificationStore(context)
         agentEngine = LumiAgentEngine(taskPlanner)
         agentExecutor = LumiAgentExecutor(taskExecutor, messageExecutor, contactResolver)
+        educationBridge = LumiEducationBridge(context)
         prepareRecognizer()
         voiceManager = LumiVoiceManager(context)
         handler.postDelayed({ startListening() }, 300L)
@@ -174,6 +177,16 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         memoryStore.addTurn("usuario", rawText)
 
         val normalized = rawText.trim().lowercase()
+        val educationIntent = educationIntentEngine.parse(rawText)
+        if (educationIntent != null) {
+            when (educationIntent) {
+                is LumiEducationIntent.Tutor -> educationBridge.tutor(educationIntent.text) { result -> handler.post { respond(result) } }
+                is LumiEducationIntent.Oraculo -> educationBridge.oraculo(educationIntent.text) { result -> handler.post { respond(result) } }
+                LumiEducationIntent.BcvRate -> educationBridge.bcvRate { result -> handler.post { respond(result) } }
+            }
+            return
+        }
+
         val agentPlan = agentEngine.plan(rawText)
         if (agentPlan != null && agentPlan.tasks.size > 1) {
             pendingAgentTasks = agentPlan.tasks.toMutableList()
@@ -411,6 +424,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         recognizer = null
         voiceManager?.shutdown()
         voiceManager = null
+        educationBridge.shutdown()
         handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
