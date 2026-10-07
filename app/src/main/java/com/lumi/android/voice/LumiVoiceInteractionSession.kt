@@ -3,6 +3,7 @@ package com.lumi.android.voice
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
@@ -141,7 +142,9 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             return
         }
         recognizer = try {
-            if (SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+            ) {
                 SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             } else {
                 SpeechRecognizer.createSpeechRecognizer(context)
