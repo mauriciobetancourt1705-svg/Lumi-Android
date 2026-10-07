@@ -11,6 +11,7 @@ import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.lumi.android.voice.LumiEducationBridge
+import com.lumi.android.voice.LumiAutonomyController
 import com.lumi.android.voice.LumiVoiceManager
 
 class MainActivity : AppCompatActivity() {
@@ -22,11 +23,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var educationStatus: TextView
     private lateinit var educationUrl: EditText
     private lateinit var educationToken: EditText
+    private lateinit var autonomy: LumiAutonomyController
+    private lateinit var autonomyStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         voiceManager = LumiVoiceManager(this)
         educationBridge = LumiEducationBridge(this)
+        autonomy = LumiAutonomyController(this)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 42, 32, 32) }
         root.addView(TextView(this).apply { text = "Lumi Android · Voz"; textSize = 26f })
         root.addView(TextView(this).apply { text = "Voz, acciones Android y conexión opcional con Education."; textSize = 16f; setPadding(0, 12, 0, 20) })
@@ -51,6 +55,27 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply { text = "Conceder acceso a contactos"; setOnClickListener { requestContacts() } }, lp())
         root.addView(Button(this).apply { text = "Conceder notificaciones"; setOnClickListener { requestNotifications() } }, lp())
         root.addView(Button(this).apply { text = "Activar acceso contextual"; setOnClickListener { startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) } }, lp())
+        root.addView(TextView(this).apply { text = "Lumi 24/7 · Seguridad y autonomía"; textSize = 21f; setPadding(0, 28, 0, 8) })
+        autonomyStatus = TextView(this).apply { textSize = 14f; text = autonomy.status(this@MainActivity) }
+        root.addView(autonomyStatus)
+        root.addView(Button(this).apply {
+            text = if (autonomy.enabled) "Desactivar Lumi 24/7" else "Activar Lumi 24/7"
+            setOnClickListener {
+                autonomy.enabled = !autonomy.enabled
+                text = if (autonomy.enabled) "Desactivar Lumi 24/7" else "Activar Lumi 24/7"
+                autonomyStatus.text = autonomy.status(this@MainActivity)
+            }
+        }, lp())
+        root.addView(Button(this).apply {
+            text = if (autonomy.backgroundListening) "Desactivar escucha en segundo plano" else "Autorizar escucha en segundo plano"
+            setOnClickListener {
+                if (!autonomy.enabled) autonomy.enabled = true
+                autonomy.backgroundListening = !autonomy.backgroundListening
+                text = if (autonomy.backgroundListening) "Desactivar escucha en segundo plano" else "Autorizar escucha en segundo plano"
+                autonomyStatus.text = autonomy.status(this@MainActivity)
+            }
+        }, lp())
+        root.addView(TextView(this).apply { text = autonomy.privacySummary(); textSize = 13f; setPadding(0, 8, 0, 8) })
         root.addView(TextView(this).apply { text = "Conexión con Education"; textSize = 21f; setPadding(0, 28, 0, 8) })
         educationUrl = EditText(this).apply {
             hint = "URL de Education (https://...)"
