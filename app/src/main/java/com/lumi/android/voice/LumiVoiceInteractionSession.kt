@@ -326,9 +326,9 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
                 silenceMode = false
                 respond("Claro, aquí estoy. Te escucho.")
             }
-            LumiIntent.Greeting -> respond("Hola. Aquí estoy contigo.")
-            LumiIntent.Thanks -> respond("Siempre.")
-            LumiIntent.Status -> respond(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
+            LumiIntent.Greeting -> askEducationLumi(rawText)
+            LumiIntent.Thanks -> askEducationLumi(rawText)
+            LumiIntent.Status -> askEducationLumi(rawText)
             is LumiIntent.OpenApp,
             is LumiIntent.WebSearch,
             is LumiIntent.PlayContent,
