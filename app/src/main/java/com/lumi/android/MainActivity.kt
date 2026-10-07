@@ -539,6 +539,8 @@ class MainActivity : AppCompatActivity() {
             LumiIntent.Greeting -> speakInApp("Hola. Aquí estoy contigo.")
             LumiIntent.Thanks -> speakInApp("Siempre.")
             LumiIntent.Status -> speakInApp(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
+            LumiIntent.AutonomyStatus -> speakInApp(autonomy.status(this))
+            LumiIntent.Privacy -> speakInApp(autonomy.privacySummary())
             is LumiIntent.OpenApp,
             is LumiIntent.WebSearch,
             is LumiIntent.PlayContent,
