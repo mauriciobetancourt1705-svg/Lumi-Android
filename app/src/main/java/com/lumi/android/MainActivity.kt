@@ -24,6 +24,25 @@ import androidx.appcompat.app.AppCompatActivity
 import com.lumi.android.voice.LumiEducationBridge
 import com.lumi.android.voice.LumiAutonomyController
 import com.lumi.android.voice.LumiVoiceManager
+import com.lumi.android.voice.LumiIntent
+import com.lumi.android.voice.LumiIntentEngine
+import com.lumi.android.voice.LumiMemoryStore
+import com.lumi.android.voice.LumiContextEngine
+import com.lumi.android.voice.LumiContextIntent
+import com.lumi.android.voice.LumiMessageEngine
+import com.lumi.android.voice.LumiMessageActionExecutor
+import com.lumi.android.voice.LumiContactResolver
+import com.lumi.android.voice.LumiAgendaEngine
+import com.lumi.android.voice.LumiAgendaActionExecutor
+import com.lumi.android.voice.LumiEmailEngine
+import com.lumi.android.voice.LumiEmailActionExecutor
+import com.lumi.android.voice.LumiTask
+import com.lumi.android.voice.LumiTaskPlanner
+import com.lumi.android.voice.LumiTaskExecutor
+import com.lumi.android.voice.LumiAgentEngine
+import com.lumi.android.voice.LumiAgentExecutor
+import com.lumi.android.voice.LumiNotificationStore
+import com.lumi.android.voice.LumiEducationIntentEngine
 import com.lumi.android.wellbeing.LumiPersonalityEngine
 
 class MainActivity : AppCompatActivity() {
@@ -45,8 +64,28 @@ class MainActivity : AppCompatActivity() {
     private var listening = false
     private var speaking = false
     private val personality = LumiPersonalityEngine()
-    private val intentEngine = com.lumi.android.voice.LumiIntentEngine()
+    private val intentEngine = LumiIntentEngine()
     private lateinit var androidActionExecutor: com.lumi.android.voice.LumiAndroidActionExecutor
+    private lateinit var memoryStore: LumiMemoryStore
+    private lateinit var contextEngine: LumiContextEngine
+    private lateinit var notificationStore: LumiNotificationStore
+    private lateinit var messageEngine: LumiMessageEngine
+    private lateinit var messageExecutor: LumiMessageActionExecutor
+    private lateinit var agendaEngine: LumiAgendaEngine
+    private lateinit var agendaExecutor: LumiAgendaActionExecutor
+    private lateinit var emailEngine: LumiEmailEngine
+    private lateinit var emailExecutor: LumiEmailActionExecutor
+    private lateinit var taskPlanner: LumiTaskPlanner
+    private lateinit var taskExecutor: LumiTaskExecutor
+    private lateinit var agentEngine: LumiAgentEngine
+    private lateinit var agentExecutor: LumiAgentExecutor
+    private val educationIntentEngine = LumiEducationIntentEngine()
+    private var pendingAgentTasks: MutableList<LumiTask> = mutableListOf()
+    private var pendingAgentIndex = 0
+    private var pendingMessage: com.lumi.android.voice.LumiMessageRequest? = null
+    private var pendingContact: com.lumi.android.voice.LumiContact? = null
+    private var pendingAgenda: com.lumi.android.voice.LumiAgendaRequest? = null
+    private var pendingEmail: com.lumi.android.voice.LumiEmailRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +120,16 @@ class MainActivity : AppCompatActivity() {
             setOnSeekBarChangeListener(seekListener { value -> voiceManager.speechRate = 0.5f + value / 100f; updateLabels() })
         }, lp())
         root.addView(Button(this).apply { text = "Probar voz de Lumi"; setOnClickListener { voiceManager.speak("Hola, soy Lumi. Esta es la voz que has elegido.") } }, lp())
+        root.addView(Button(this).apply {
+            text = "INSTALAR / CONFIGURAR VOCES ESPAÑOLAS"
+            setOnClickListener {
+                try {
+                    startActivity(Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+                } catch (_: android.content.ActivityNotFoundException) {
+                    startActivity(Intent(android.provider.Settings.ACTION_TEXT_TO_SPEECH_SETTINGS))
+                }
+            }
+        }, lp())
         voiceStatus = TextView(this).apply {
             text = "Lumi está lista para escucharte."
             textSize = 15f
@@ -157,10 +206,32 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply { text = "Programar check-in diario de Lumi"; setOnClickListener { scheduleDailyWellbeingCheckIn(); voiceManager.speak("Listo. Te recordaré una vez al día para saber cómo estás.") } }, lp())
         root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
         androidActionExecutor = com.lumi.android.voice.LumiAndroidActionExecutor(this)
+        contextEngine = LumiContextEngine()
+        notificationStore = LumiNotificationStore(this)
+        messageEngine = LumiMessageEngine()
+        val contactResolver = LumiContactResolver(this)
+        messageExecutor = LumiMessageActionExecutor(this, contactResolver)
+        agendaEngine = LumiAgendaEngine()
+        agendaExecutor = LumiAgendaActionExecutor(this)
+        emailEngine = LumiEmailEngine()
+        emailExecutor = LumiEmailActionExecutor(this)
+        taskPlanner = LumiTaskPlanner(messageEngine)
+        taskExecutor = LumiTaskExecutor(messageExecutor, androidActionExecutor)
+        agentEngine = LumiAgentEngine(taskPlanner)
+        agentExecutor = LumiAgentExecutor(taskExecutor, messageExecutor, contactResolver)
         prepareInAppRecognizer()
         setContentView(root)
         if (intent?.action == "com.lumi.android.CHECK_IN") {
             root.postDelayed({ voiceManager.speak(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN)) }, 350L)
+        }
+        voiceManager.onReady {
+            runOnUiThread {
+                updateVoiceList()
+                voiceStatus.text = if (voiceManager.availableSpanishVoices().isEmpty())
+                    "Motor de voz listo. No hay voces españolas instaladas; usa «Instalar / configurar voces españolas»."
+                else
+                    "Voces españolas disponibles: " + voiceManager.availableSpanishVoices().size
+            }
         }
         updateVoiceList()
         updateLabels()
@@ -230,13 +301,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
         speechRecognizer = try {
+            SpeechRecognizer.createSpeechRecognizer(this)
+        } catch (_: RuntimeException) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
                 SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
             } else {
-                SpeechRecognizer.createSpeechRecognizer(this)
+                null
             }
-        } catch (_: RuntimeException) {
-            SpeechRecognizer.createSpeechRecognizer(this)
         }
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
@@ -320,51 +391,169 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleInAppCommand(rawText: String) {
-        val educationIntent = educationBridge.let { com.lumi.android.voice.LumiEducationIntentEngine().parse(rawText) }
+        memoryStore.addTurn("usuario", rawText)
+
+        val educationIntent = educationIntentEngine.parse(rawText)
         if (educationIntent != null) {
             when (educationIntent) {
                 is com.lumi.android.voice.LumiEducationIntent.Tutor ->
                     educationBridge.tutor(educationIntent.text) { result -> runOnUiThread { speakInApp(result) } }
                 is com.lumi.android.voice.LumiEducationIntent.Oraculo ->
                     educationBridge.oraculo(educationIntent.text) { result -> runOnUiThread { speakInApp(result) } }
-                com.lumi.android.voice.LumiEducationIntent.BcvRate ->
+                LumiEducationIntent.BcvRate ->
                     educationBridge.bcvRate { result -> runOnUiThread { speakInApp(result) } }
             }
             return
         }
 
+        val agentPlan = agentEngine.plan(rawText)
+        if (agentPlan != null && agentPlan.tasks.size > 1) {
+            pendingAgentTasks = agentPlan.tasks.toMutableList()
+            pendingAgentIndex = 0
+            executeNextAgentTask()
+            return
+        }
+
+        val contextIntent = contextEngine.parse(rawText)
+        if (contextIntent != null) {
+            when (contextIntent) {
+                LumiContextIntent.RecentNotifications -> speakInApp(notificationStore.summary())
+                LumiContextIntent.ClearRecentNotifications -> {
+                    notificationStore.clear()
+                    speakInApp("Listo. Borré de la memoria local las notificaciones que Lumi había guardado.")
+                }
+            }
+            return
+        }
+
+        val normalized = rawText.trim().lowercase(java.util.Locale("es", "VE"))
+
+        if (pendingEmail != null) {
+            if (normalized in setOf("sí", "si", "sí, hazlo", "si hazlo", "hazlo", "adelante", "confirmo", "confirma")) {
+                val request = pendingEmail!!
+                pendingEmail = null
+                speakInApp(emailExecutor.send(request))
+                return
+            }
+            if (normalized in setOf("no", "cancelar", "cancela", "no lo hagas")) {
+                pendingEmail = null
+                speakInApp("Listo, no envié el correo.")
+                return
+            }
+        }
+
+        if (pendingAgenda != null) {
+            if (normalized in setOf("sí", "si", "sí, hazlo", "si hazlo", "hazlo", "adelante", "confirmo", "confirma")) {
+                val request = pendingAgenda!!
+                pendingAgenda = null
+                if (request.type == com.lumi.android.voice.LumiAgendaRequest.Type.REMINDER) {
+                    speakInApp(agendaExecutor.createReminder(request))
+                } else {
+                    speakInApp(agendaExecutor.openCalendar(request))
+                }
+                return
+            }
+            if (normalized in setOf("no", "cancelar", "cancela", "no lo hagas")) {
+                pendingAgenda = null
+                speakInApp("Listo, cancelé esa acción.")
+                return
+            }
+        }
+
+        if (pendingMessage != null && pendingContact != null) {
+            if (normalized in setOf("sí", "si", "sí, envíalo", "si envialo", "envíalo", "envialo", "hazlo", "adelante")) {
+                val request = pendingMessage!!
+                val contact = pendingContact!!
+                pendingMessage = null
+                pendingContact = null
+                speakInApp(messageExecutor.send(request, contact))
+                return
+            }
+            if (normalized in setOf("no", "cancelar", "cancela", "no lo envíes", "no lo envies")) {
+                pendingMessage = null
+                pendingContact = null
+                speakInApp("Listo, no envié nada.")
+                return
+            }
+        }
+
+        emailEngine.parse(rawText)?.let {
+            pendingEmail = it
+            speakInApp(emailExecutor.prepare(it))
+            return
+        }
+
+        agendaEngine.parse(rawText)?.let {
+            pendingAgenda = it
+            speakInApp(agendaExecutor.prepare(it) + " ¿Quieres que lo haga?")
+            return
+        }
+
+        messageEngine.parse(rawText)?.let {
+            val (contact, confirmation) = messageExecutor.prepare(it)
+            if (contact == null) speakInApp(confirmation)
+            else {
+                pendingMessage = it
+                pendingContact = contact
+                speakInApp(confirmation)
+            }
+            return
+        }
+
         when (val intent = intentEngine.parse(rawText)) {
-            com.lumi.android.voice.LumiIntent.Silence -> {
+            LumiIntent.Silence -> {
                 conversationActive = false
                 try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
                 voiceStatus.text = "Lumi está en silencio."
             }
-            com.lumi.android.voice.LumiIntent.Resume ->
-                speakInApp("Claro. Aquí estoy. Te escucho.")
-            com.lumi.android.voice.LumiIntent.Greeting ->
-                speakInApp("Hola. Aquí estoy contigo.")
-            com.lumi.android.voice.LumiIntent.Thanks ->
-                speakInApp("Siempre.")
-            com.lumi.android.voice.LumiIntent.Status ->
-                speakInApp(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
-            is com.lumi.android.voice.LumiIntent.OpenApp,
-            is com.lumi.android.voice.LumiIntent.WebSearch,
-            com.lumi.android.voice.LumiIntent.OpenSettings,
-            com.lumi.android.voice.LumiIntent.VolumeUp,
-            com.lumi.android.voice.LumiIntent.VolumeDown,
-            com.lumi.android.voice.LumiIntent.PlayPause -> {
+            LumiIntent.Resume -> speakInApp("Claro. Aquí estoy. Te escucho.")
+            LumiIntent.Greeting -> speakInApp("Hola. Aquí estoy contigo.")
+            LumiIntent.Thanks -> speakInApp("Siempre.")
+            LumiIntent.Status -> speakInApp(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
+            is LumiIntent.OpenApp,
+            is LumiIntent.WebSearch,
+            is LumiIntent.PlayContent,
+            LumiIntent.OpenSettings,
+            LumiIntent.VolumeUp,
+            LumiIntent.VolumeDown,
+            LumiIntent.PlayPause -> {
                 try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
                 androidActionExecutor.execute(intent) { message, _ ->
-                    runOnUiThread {
-                        if (message.isBlank()) {
-                            scheduleConversationListen(300L)
-                        } else {
-                            speakInApp(message)
-                        }
-                    }
+                    runOnUiThread { if (message.isBlank()) scheduleConversationListen(300L) else speakInApp(message) }
                 }
             }
+            is LumiIntent.Conversation -> speakInApp(personality.reply(rawText))
             else -> speakInApp(personality.reply(rawText))
+        }
+    }
+
+    private fun executeNextAgentTask() {
+        if (pendingAgentIndex >= pendingAgentTasks.size) {
+            val total = pendingAgentTasks.size
+            pendingAgentTasks.clear()
+            pendingAgentIndex = 0
+            speakInApp("Listo. Completé los $total pasos de la tarea.")
+            return
+        }
+        when (val task = pendingAgentTasks[pendingAgentIndex]) {
+            is LumiTask.SendMessage -> {
+                val (contact, confirmation) = agentExecutor.prepareMessage(task)
+                if (contact == null) {
+                    pendingAgentTasks.clear()
+                    pendingAgentIndex = 0
+                    speakInApp(confirmation)
+                    return
+                }
+                pendingMessage = task.request
+                pendingContact = contact
+                speakInApp("Paso " + (pendingAgentIndex + 1) + ": " + confirmation + " ¿Lo envío?")
+            }
+            else -> agentExecutor.executeNonMessage(task) { result ->
+                runOnUiThread {
+                    pendingAgentIndex++
+                    if (result.isNotBlank()) speakInApp(result) else executeNextAgentTask()
+                }
+            }
         }
     }
 
