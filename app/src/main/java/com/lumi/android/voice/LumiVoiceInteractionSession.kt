@@ -185,9 +185,16 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         val educationIntent = educationIntentEngine.parse(rawText)
         if (educationIntent != null) {
             when (educationIntent) {
-                is LumiEducationIntent.Tutor -> educationBridge.tutor(educationIntent.text) { result -> handler.post { respond(result) } }
-                is LumiEducationIntent.Oraculo -> educationBridge.oraculo(educationIntent.text) { result -> handler.post { respond(result) } }
-                LumiEducationIntent.BcvRate -> educationBridge.bcvRate { result -> handler.post { respond(result) } }
+                is LumiEducationIntent.Tutor ->
+                    educationBridge.tutor(educationIntent.text, "aprender", memoryStore.recentTurns()) { result ->
+                        handler.post { respond(result) }
+                    }
+                is LumiEducationIntent.Oraculo ->
+                    educationBridge.oraculo(educationIntent.text, memoryStore.recentTurns()) { result ->
+                        handler.post { respond(result) }
+                    }
+                LumiEducationIntent.BcvRate ->
+                    educationBridge.bcvRate { result -> handler.post { respond(result) } }
             }
             return
         }
@@ -319,8 +326,19 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             LumiIntent.VolumeUp,
             LumiIntent.VolumeDown,
             LumiIntent.PlayPause -> executeAndroidAction(intent)
-            is LumiIntent.Conversation -> respond(personality.reply(rawText))
-            else -> respond(personality.reply(rawText))
+            is LumiIntent.Conversation -> askEducationLumi(rawText)
+            else -> askEducationLumi(rawText)
+        }
+    }
+
+    private fun askEducationLumi(rawText: String) {
+        if (!educationBridge.isConfigured()) {
+            respond(personality.reply(rawText))
+            return
+        }
+        status.text = "Lumi está pensando…"
+        educationBridge.lumiConversation(rawText, memoryStore.recentTurns()) { result ->
+            handler.post { respond(result) }
         }
     }
 
