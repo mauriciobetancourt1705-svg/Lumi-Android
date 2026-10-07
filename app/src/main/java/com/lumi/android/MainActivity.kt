@@ -63,6 +63,8 @@ class MainActivity : AppCompatActivity() {
     private var conversationActive = false
     private var listening = false
     private var speaking = false
+    private var listenGeneration = 0L
+    private var listenScheduled = false
     private val personality = LumiPersonalityEngine()
     private val intentEngine = LumiIntentEngine()
     private lateinit var androidActionExecutor: com.lumi.android.voice.LumiAndroidActionExecutor
@@ -380,6 +382,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startConversation() {
+        listenGeneration++
+        listenScheduled = false
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             androidx.core.app.ActivityCompat.requestPermissions(this, arrayOf(android.Manifest.permission.RECORD_AUDIO), 1001)
             return
@@ -635,6 +639,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopConversation() {
+        listenGeneration++
+        listenScheduled = false
         conversationActive = false
         speaking = false
         listening = false
