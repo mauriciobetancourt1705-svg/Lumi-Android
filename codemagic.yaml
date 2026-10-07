@@ -31,9 +31,3 @@ workflows:
       - app/build/outputs/apk/debug/app-debug.apk
       - app/build/outputs/**/*.apk
       - app/build/reports/lint-results-debug.html
-
-    publishing:
-      email:
-        notify:
-          success: false
-          failure: true
