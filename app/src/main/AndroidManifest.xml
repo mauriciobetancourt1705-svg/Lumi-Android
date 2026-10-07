@@ -64,5 +64,11 @@
             android:exported="false"
             android:permission="android.permission.BIND_VOICE_INTERACTION"
             android:label="@string/voice_session_service_label" />
+
+        <service
+            android:name=".voice.LumiBackgroundVoiceService"
+            android:exported="false"
+            android:foregroundServiceType="microphone"
+            android:stopWithTask="false" />
     </application>
 </manifest>
