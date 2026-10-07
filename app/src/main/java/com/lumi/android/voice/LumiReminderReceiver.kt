@@ -15,7 +15,10 @@ class LumiReminderReceiver : BroadcastReceiver() {
         val channelId = "lumi_reminders"
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(NotificationChannel(channelId, "Recordatorios de Lumi", NotificationManager.IMPORTANCE_HIGH))
-        val openIntent = PendingIntent.getActivity(context, 7001, Intent(context, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val openActivity = Intent(context, MainActivity::class.java).apply {
+            if (intent.getBooleanExtra("lumi_check_in", false)) action = "com.lumi.android.CHECK_IN"
+        }
+        val openIntent = PendingIntent.getActivity(context, 7001, openActivity, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle("Lumi")

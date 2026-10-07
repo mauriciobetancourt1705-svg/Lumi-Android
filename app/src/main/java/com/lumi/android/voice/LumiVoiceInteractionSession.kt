@@ -12,6 +12,7 @@ import android.service.voice.VoiceInteractionSession
 import android.view.View
 import android.widget.TextView
 import java.util.Locale
+import com.lumi.android.wellbeing.LumiPersonalityEngine
 
 class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(context) {
     private val handler = Handler(Looper.getMainLooper())
@@ -34,6 +35,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private lateinit var agentExecutor: LumiAgentExecutor
     private lateinit var educationBridge: LumiEducationBridge
     private val educationIntentEngine = LumiEducationIntentEngine()
+    private val personality = LumiPersonalityEngine()
     private var pendingAgentTasks: MutableList<LumiTask> = mutableListOf()
     private var pendingAgentIndex = 0
     private lateinit var notificationStore: LumiNotificationStore
@@ -306,14 +308,14 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             }
             LumiIntent.Greeting -> respond("Hola. Aquí estoy contigo.")
             LumiIntent.Thanks -> respond("Siempre.")
-            LumiIntent.Status -> respond("Estoy aquí contigo. ¿Qué necesitas?")
+            LumiIntent.Status -> respond(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN))
             is LumiIntent.OpenApp,
             is LumiIntent.WebSearch,
             LumiIntent.OpenSettings,
             LumiIntent.VolumeUp,
             LumiIntent.VolumeDown,
             LumiIntent.PlayPause -> executeAndroidAction(intent)
-            is LumiIntent.Conversation -> respond("Te escucho. " + rawText.trim())
+            is LumiIntent.Conversation -> respond(personality.reply(rawText))
         }
     }
 

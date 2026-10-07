@@ -1,6 +1,10 @@
 package com.lumi.android
 
 import android.os.Bundle
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.Intent
+import java.util.Calendar
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -13,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.lumi.android.voice.LumiEducationBridge
 import com.lumi.android.voice.LumiAutonomyController
 import com.lumi.android.voice.LumiVoiceManager
+import com.lumi.android.wellbeing.LumiPersonalityEngine
 
 class MainActivity : AppCompatActivity() {
     private lateinit var voiceManager: LumiVoiceManager
@@ -29,7 +34,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         voiceManager = LumiVoiceManager(this)
+        val personality = LumiPersonalityEngine()
         educationBridge = LumiEducationBridge(this)
+        scheduleDailyWellbeingCheckIn()
         autonomy = LumiAutonomyController(this)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 42, 32, 32) }
         root.addView(TextView(this).apply { text = "Lumi Android · Voz"; textSize = 26f })
@@ -107,12 +114,33 @@ class MainActivity : AppCompatActivity() {
                 educationBridge.health { result -> runOnUiThread { educationStatus.text = "Education: $result" } }
             }
         }, lp())
+        root.addView(TextView(this).apply { text = "Capa 13 · Personalidad y bienestar"; textSize = 21f; setPadding(0, 28, 0, 8) })
+        root.addView(TextView(this).apply { text = "Lumi puede acercarse una vez al día para preguntarte cómo estás. Tú decides cuándo y puedes ignorar el aviso."; textSize = 14f; setPadding(0, 0, 0, 8) })
+        root.addView(Button(this).apply { text = "Programar check-in diario de Lumi"; setOnClickListener { scheduleDailyWellbeingCheckIn(); voiceManager.speak("Listo. Te recordaré una vez al día para saber cómo estás.") } }, lp())
         root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
         setContentView(root)
+        if (intent?.action == "com.lumi.android.CHECK_IN") {
+            root.postDelayed { voiceManager.speak(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN)) }, 350L)
+        }
         updateVoiceList()
         updateLabels()
     }
 
+    private fun scheduleDailyWellbeingCheckIn() {
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 19)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+            if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
+        }
+        val intent = Intent(this, com.lumi.android.voice.LumiReminderReceiver::class.java).apply {
+            putExtra("title", "Lumi quiere saber cómo estás. ¿Hablamos un momento?")
+            putExtra("lumi_check_in", true)
+        }
+        val pending = PendingIntent.getBroadcast(this, 13013, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pending)
+    }
     private fun updateVoiceList() {
         val voices = voiceManager.availableSpanishVoices()
         val labels = voices.map { voiceManager.voiceLabel(it) }.ifEmpty { listOf("No hay voces españolas disponibles") }
