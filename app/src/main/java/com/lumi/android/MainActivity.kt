@@ -17,6 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.lumi.android.voice.LumiEducationBridge
 import com.lumi.android.voice.LumiAutonomyController
 import com.lumi.android.voice.LumiVoiceManager
+import com.lumi.android.wellbeing.LumiPersonalityEngine
 
 class MainActivity : AppCompatActivity() {
     private lateinit var voiceManager: LumiVoiceManager
@@ -33,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         voiceManager = LumiVoiceManager(this)
+        val personality = LumiPersonalityEngine()
         educationBridge = LumiEducationBridge(this)
         scheduleDailyWellbeingCheckIn()
         autonomy = LumiAutonomyController(this)
@@ -117,6 +119,9 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply { text = "Programar check-in diario de Lumi"; setOnClickListener { scheduleDailyWellbeingCheckIn(); voiceManager.speak("Listo. Te recordaré una vez al día para saber cómo estás.") } }, lp())
         root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
         setContentView(root)
+        if (intent?.action == "com.lumi.android.CHECK_IN") {
+            root.postDelayed { voiceManager.speak(personality.greeting(moment = LumiPersonalityEngine.Moment.CHECK_IN)) }, 350L)
+        }
         updateVoiceList()
         updateLabels()
     }
