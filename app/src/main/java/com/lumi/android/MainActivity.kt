@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply { text = "Conceder micrófono"; setOnClickListener { requestMicrophone() } }, lp())
         root.addView(Button(this).apply { text = "Conceder acceso a contactos"; setOnClickListener { requestContacts() } }, lp())
         root.addView(Button(this).apply { text = "Conceder notificaciones"; setOnClickListener { requestNotifications() } }, lp())
+        root.addView(Button(this).apply { text = "Activar acceso contextual"; setOnClickListener { startActivity(android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")) } }, lp())
         root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
         setContentView(root)
         updateVoiceList()
