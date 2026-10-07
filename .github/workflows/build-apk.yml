@@ -1,4 +1,5 @@
 name: Build Lumi Android APK
+# Fase 4 parity-audit build
 
 on:
   push:
