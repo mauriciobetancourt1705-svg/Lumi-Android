@@ -47,6 +47,7 @@ import com.lumi.android.wellbeing.LumiPersonalityEngine
 
 class MainActivity : AppCompatActivity() {
     private lateinit var voiceManager: LumiVoiceManager
+    private lateinit var neuralTtsPlayer: com.lumi.android.voice.LumiNeuralTtsPlayer
     private lateinit var voiceSpinner: Spinner
     private lateinit var pitchValue: TextView
     private lateinit var rateValue: TextView
@@ -92,6 +93,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         voiceManager = LumiVoiceManager(this)
+        neuralTtsPlayer = com.lumi.android.voice.LumiNeuralTtsPlayer(this)
         val personality = LumiPersonalityEngine()
         educationBridge = LumiEducationBridge(this)
         scheduleDailyWellbeingCheckIn()
@@ -618,28 +620,33 @@ class MainActivity : AppCompatActivity() {
         try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
         voiceStatus.text = "Lumi está hablando…"
         voiceTranscript.text = text
-        voiceManager.speak(
-            text,
-            onStart = { runOnUiThread { voiceStatus.text = "Lumi está hablando…" } },
-            onDone = {
-                runOnUiThread {
-                    speaking = false
-                    if (conversationActive) {
-                        voiceStatus.text = "Lumi está escuchando…"
-                        scheduleConversationListen(300L)
+
+        fun nativeFallback() {
+            voiceManager.speak(
+                text,
+                onStart = { runOnUiThread { voiceStatus.text = "Lumi está hablando…" } },
+                onDone = { runOnUiThread { speaking = false; if (conversationActive) { voiceStatus.text = "Lumi está escuchando…"; scheduleConversationListen(300L) } } },
+                onError = { runOnUiThread { speaking = false; if (conversationActive) { voiceStatus.text = "Lumi sigue disponible."; scheduleConversationListen(500L) } } }
+            )
+        }
+
+        if (educationBridge.isConfigured()) {
+            educationBridge.lumiTts(
+                text,
+                voiceManager.educationVoiceId,
+                callback = { audio, mime ->
+                    runOnUiThread {
+                        neuralTtsPlayer.play(
+                            audio, mime,
+                            onStart = { voiceStatus.text = "Lumi está hablando…" },
+                            onDone = { speaking = false; if (conversationActive) { voiceStatus.text = "Lumi está escuchando…"; scheduleConversationListen(300L) } },
+                            onError = { nativeFallback() }
+                        )
                     }
-                }
-            },
-            onError = {
-                runOnUiThread {
-                    speaking = false
-                    if (conversationActive) {
-                        voiceStatus.text = "Lumi sigue disponible."
-                        scheduleConversationListen(500L)
-                    }
-                }
-            }
-        )
+                },
+                onError = { runOnUiThread { nativeFallback() } }
+            )
+        } else nativeFallback()
     }
 
     private fun stopConversation() {
@@ -651,6 +658,7 @@ class MainActivity : AppCompatActivity() {
         voiceHandler.removeCallbacksAndMessages(null)
         try { speechRecognizer?.cancel() } catch (_: RuntimeException) {}
         voiceManager.stop()
+        neuralTtsPlayer.stop()
         voiceStatus.text = "Lumi está en espera."
     }
 
@@ -677,6 +685,7 @@ class MainActivity : AppCompatActivity() {
         try { speechRecognizer?.destroy() } catch (_: RuntimeException) {}
         speechRecognizer = null
         educationBridge.shutdown()
+        neuralTtsPlayer.stop()
         voiceManager.shutdown()
         super.onDestroy()
     }
