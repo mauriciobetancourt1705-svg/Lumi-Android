@@ -30,6 +30,8 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private lateinit var taskExecutor: LumiTaskExecutor
     private lateinit var agendaExecutor: LumiAgendaActionExecutor
     private lateinit var emailExecutor: LumiEmailActionExecutor
+    private lateinit var notificationStore: LumiNotificationStore
+    private val contextEngine = LumiContextEngine()
     private val agendaEngine = LumiAgendaEngine()
     private val messageEngine = LumiMessageEngine()
     private val emailEngine = LumiEmailEngine()
@@ -115,6 +117,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         taskExecutor = LumiTaskExecutor(messageExecutor, actionExecutor)
         agendaExecutor = LumiAgendaActionExecutor(context)
         emailExecutor = LumiEmailActionExecutor(context)
+        notificationStore = LumiNotificationStore(context)
         prepareRecognizer()
         voiceManager = LumiVoiceManager(context)
         handler.postDelayed({ startListening() }, 300L)
@@ -188,6 +191,18 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             }
             return
         }
+        val contextIntent = contextEngine.parse(rawText)
+        if (contextIntent != null) {
+            when (contextIntent) {
+                LumiContextIntent.RecentNotifications -> respond(notificationStore.summary())
+                LumiContextIntent.ClearRecentNotifications -> {
+                    notificationStore.clear()
+                    respond("Listo. Borré de la memoria local las notificaciones que Lumi había guardado.")
+                }
+            }
+            return
+        }
+
         if (pendingEmail != null) {
             if (normalized in setOf("sí", "si", "sí, hazlo", "si hazlo", "hazlo", "adelante", "confirmo", "confirma")) {
                 val request = pendingEmail!!
