@@ -134,7 +134,10 @@ class MainActivity : AppCompatActivity() {
             set(Calendar.MILLISECOND, 0)
             if (timeInMillis <= System.currentTimeMillis()) add(Calendar.DAY_OF_YEAR, 1)
         }
-        val intent = Intent(this, com.lumi.android.voice.LumiReminderReceiver::class.java).apply { putExtra("title", "Lumi quiere saber cómo estás. ¿Hablamos un momento?") }
+        val intent = Intent(this, com.lumi.android.voice.LumiReminderReceiver::class.java).apply {
+            putExtra("title", "Lumi quiere saber cómo estás. ¿Hablamos un momento?")
+            putExtra("lumi_check_in", true)
+        }
         val pending = PendingIntent.getBroadcast(this, 13013, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         getSystemService(AlarmManager::class.java)?.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pending)
     }
