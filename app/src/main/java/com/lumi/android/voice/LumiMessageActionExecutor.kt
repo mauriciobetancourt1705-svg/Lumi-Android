@@ -30,14 +30,16 @@ class LumiMessageActionExecutor(
                     "Abrí mensajes para " + contact.name + ". Revisa y pulsa enviar."
                 }
                 LumiMessageRequest.Channel.WHATSAPP -> {
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_TEXT, request.body)
+                    val phone = contact.phone.filter { it.isDigit() }.removePrefix("00")
+                    val intent = Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse("https://wa.me/" + phone + "?text=" + Uri.encode(request.body))
+                    ).apply {
                         setPackage("com.whatsapp")
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(intent)
-                    "Abrí WhatsApp con el mensaje preparado. Selecciona a " + contact.name + " y pulsa enviar."
+                    "Abrí WhatsApp directamente para " + contact.name + ". Revisa el mensaje y pulsa enviar."
                 }
             }
         } catch (_: Exception) {
