@@ -6,6 +6,7 @@ import java.util.Locale
 sealed class LumiIntent {
     data class OpenApp(val query: String) : LumiIntent()
     data class WebSearch(val query: String) : LumiIntent()
+    data class PlayContent(val query: String) : LumiIntent()
     data object OpenSettings : LumiIntent()
     data object VolumeUp : LumiIntent()
     data object VolumeDown : LumiIntent()
