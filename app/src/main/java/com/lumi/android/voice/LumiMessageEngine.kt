@@ -20,7 +20,7 @@ class LumiMessageEngine {
         val recipient =
             Regex("""(?:a|para)\\s+(.+?)\\s+(?:por|v[ií]a)\\s+(?:whatsapp|sms|mensaje)""", RegexOption.IGNORE_CASE)
                 .find(normalized)?.groupValues?.getOrNull(1)?.trim()
-            ?: Regex("""(?:whatsapp|sms)\\s+(?:a|para)\\s+(.+?)(?:\\s+(?:que|diciendo|dile|dec[ií]le)|\\s*:)""", RegexOption.IGNORE_CASE)
+            ?: Regex("""(?:redacta|escribe|manda|env[ií]a)\\s+(?:un\\s+)?(?:mensaje|texto)\\s+(?:a|para)\\s+(.+?)(?:\\s+(?:por|v[ií]a)\\s+(?:whatsapp|sms|mensaje))?\\s*[:,-]""", RegexOption.IGNORE_CASE)
                 .find(normalized)?.groupValues?.getOrNull(1)?.trim()
             ?: return null
 
