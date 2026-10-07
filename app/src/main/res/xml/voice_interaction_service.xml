@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<voice-interaction-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="com.lumi.android.voice.LumiVoiceInteractionSessionService"
+    android:recognitionService=""
+    android:supportsAssist="true"
+    android:supportsLaunchFromKeyguard="true"
+    android:settingsActivity="com.lumi.android.MainActivity" />
