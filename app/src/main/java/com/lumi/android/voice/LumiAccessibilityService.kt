@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.graphics.Rect
 import android.os.Bundle
+import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
@@ -19,8 +20,8 @@ class LumiAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         serviceInfo = serviceInfo.apply {
-            eventTypes = AccessibilityServiceInfo.TYPE_WINDOW_STATE_CHANGED or
-                AccessibilityServiceInfo.TYPE_WINDOW_CONTENT_CHANGED
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             notificationTimeout = 80
             flags = flags or
