@@ -3,6 +3,8 @@ name: Build Lumi Android APK
 on:
   push:
     branches: [main, build-first-apk-lumi-logo, lumi-education-transplant, lumi-agent-stack]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
