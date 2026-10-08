@@ -26,7 +26,19 @@ class LumiAccessibilityActionExecutor {
             else -> false to ""
         }
 
-        if (result.first) onResult(result.second, true)
-        else onResult("No pude ejecutar esa acción en la pantalla actual.", false)
+        if (!result.first) {
+            onResult("No pude ejecutar esa acción en la pantalla actual.", false)
+            return
+        }
+
+        // For state-changing UI actions, give Android a short moment to publish
+        // the resulting accessibility tree before reporting success.
+        if (intent is LumiIntent.ClickText || intent is LumiIntent.TypeText) {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                onResult(result.second, true)
+            }, 180L)
+        } else {
+            onResult(result.second, true)
+        }
     }
 }
