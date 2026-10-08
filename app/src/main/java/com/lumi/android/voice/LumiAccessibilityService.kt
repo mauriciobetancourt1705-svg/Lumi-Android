@@ -30,7 +30,7 @@ class LumiAccessibilityService : AccessibilityService() {
         }
     }
 
-    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
+    @Volatile\n    private var screenRevision: Long = 0L\n\n    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {\n        screenRevision++\n    }
 
     override fun onInterrupt() = Unit
 
@@ -70,7 +70,7 @@ class LumiAccessibilityService : AccessibilityService() {
     fun scrollBackward(): Boolean =
         findScrollable(rootInActiveWindow)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
 
-    fun containsVisibleText(text: String): Boolean {
+    fun revision(): Long = screenRevision\n\n    fun waitForScreenChange(previousRevision: Long, timeoutMs: Long = 700L, onResult: (Boolean) -> Unit) {\n        val handler = android.os.Handler(mainLooper)\n        val deadline = android.os.SystemClock.uptimeMillis() + timeoutMs\n        val check = object : Runnable {\n            override fun run() {\n                if (screenRevision != previousRevision) {\n                    onResult(true)\n                } else if (android.os.SystemClock.uptimeMillis() >= deadline) {\n                    onResult(false)\n                } else {\n                    handler.postDelayed(this, 70L)\n                }\n            }\n        }\n        handler.post(check)\n    }\n\n    fun containsVisibleText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val needle = text.trim()
         if (needle.isBlank()) return false
