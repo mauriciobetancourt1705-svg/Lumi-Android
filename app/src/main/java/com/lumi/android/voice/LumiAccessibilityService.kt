@@ -30,7 +30,12 @@ class LumiAccessibilityService : AccessibilityService() {
         }
     }
 
-    @Volatile\n    private var screenRevision: Long = 0L\n\n    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {\n        screenRevision++\n    }
+    @Volatile
+    private var screenRevision: Long = 0L
+
+    override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) {
+        screenRevision++
+    }
 
     override fun onInterrupt() = Unit
 
@@ -70,7 +75,26 @@ class LumiAccessibilityService : AccessibilityService() {
     fun scrollBackward(): Boolean =
         findScrollable(rootInActiveWindow)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
 
-    fun revision(): Long = screenRevision\n\n    fun waitForScreenChange(previousRevision: Long, timeoutMs: Long = 700L, onResult: (Boolean) -> Unit) {\n        val handler = android.os.Handler(mainLooper)\n        val deadline = android.os.SystemClock.uptimeMillis() + timeoutMs\n        val check = object : Runnable {\n            override fun run() {\n                if (screenRevision != previousRevision) {\n                    onResult(true)\n                } else if (android.os.SystemClock.uptimeMillis() >= deadline) {\n                    onResult(false)\n                } else {\n                    handler.postDelayed(this, 70L)\n                }\n            }\n        }\n        handler.post(check)\n    }\n\n    fun containsVisibleText(text: String): Boolean {
+    fun revision(): Long = screenRevision
+
+    fun waitForScreenChange(previousRevision: Long, timeoutMs: Long = 700L, onResult: (Boolean) -> Unit) {
+        val handler = android.os.Handler(mainLooper)
+        val deadline = android.os.SystemClock.uptimeMillis() + timeoutMs
+        val check = object : Runnable {
+            override fun run() {
+                if (screenRevision != previousRevision) {
+                    onResult(true)
+                } else if (android.os.SystemClock.uptimeMillis() >= deadline) {
+                    onResult(false)
+                } else {
+                    handler.postDelayed(this, 70L)
+                }
+            }
+        }
+        handler.post(check)
+    }
+
+    fun containsVisibleText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val needle = text.trim()
         if (needle.isBlank()) return false
@@ -161,7 +185,8 @@ class LumiAccessibilityService : AccessibilityService() {
                 .append(bounds.bottom).append("]")
                 .append(if (node.isClickable) " clickable" else "")
                 .append(if (node.isEditable) " editable" else "")
-                .append('\n')
+                .append('
+')
         }
         for (i in 0 until node.childCount) {
             node.getChild(i)?.let { appendNodeSummary(it, out, depth + 1) }
