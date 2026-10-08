@@ -185,8 +185,7 @@ class LumiAccessibilityService : AccessibilityService() {
                 .append(bounds.bottom).append("]")
                 .append(if (node.isClickable) " clickable" else "")
                 .append(if (node.isEditable) " editable" else "")
-                .append('
-')
+                .append('\n')
         }
         for (i in 0 until node.childCount) {
             node.getChild(i)?.let { appendNodeSummary(it, out, depth + 1) }
