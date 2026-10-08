@@ -16,6 +16,7 @@ sealed class LumiIntent {
     data object OpenRecents : LumiIntent()
     data object ScrollForward : LumiIntent()
     data object ScrollBackward : LumiIntent()
+    data object DescribeScreen : LumiIntent()
     data class ClickText(val text: String) : LumiIntent()
     data class TypeText(val text: String) : LumiIntent()
     data object Silence : LumiIntent()
@@ -63,6 +64,7 @@ class LumiIntentEngine {
         if (containsAny(normalized, "abre recientes", "muestra recientes", "aplicaciones recientes", "apps recientes")) return LumiIntent.OpenRecents
         if (containsAny(normalized, "desplazate hacia abajo", "desplázate hacia abajo", "baja la pantalla", "haz scroll hacia abajo")) return LumiIntent.ScrollForward
         if (containsAny(normalized, "desplazate hacia arriba", "desplázate hacia arriba", "sube la pantalla", "haz scroll hacia arriba")) return LumiIntent.ScrollBackward
+        if (containsAny(normalized, "que hay en pantalla", "qué hay en pantalla", "lee la pantalla", "describe la pantalla", "que aparece en pantalla", "qué aparece en pantalla")) return LumiIntent.DescribeScreen
 
         extractAfter(normalized, listOf("pulsa ", "presiona ", "toca ", "haz clic en "))
             ?.takeIf { it.isNotBlank() }
