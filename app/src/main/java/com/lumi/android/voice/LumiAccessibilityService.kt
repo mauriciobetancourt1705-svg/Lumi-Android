@@ -45,8 +45,10 @@ class LumiAccessibilityService : AccessibilityService() {
 
     fun openRecents(): Boolean = performGlobalAction(GLOBAL_ACTION_RECENTS)
 
-    fun clickText(text: String): Boolean =
-        findNodeByText(text)?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+    fun clickText(text: String): Boolean {
+        val node = findNodeByText(text) ?: return false
+        return performClickOrParent(node)
+    }
 
     fun clickDescription(description: String): Boolean =
         findNodeByDescription(description)?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
@@ -80,6 +82,15 @@ class LumiAccessibilityService : AccessibilityService() {
         val exact = root.findAccessibilityNodeInfosByText(text)
         return exact.firstOrNull { it.isVisibleToUser }
             ?: exact.firstOrNull()
+    }
+
+    private fun performClickOrParent(node: AccessibilityNodeInfo): Boolean {
+        var current: AccessibilityNodeInfo? = node
+        repeat(6) {
+            if (current?.isVisibleToUser == true && current.isClickable && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+            current = current?.parent
+        }
+        return false
     }
 
     private fun findNodeByDescription(description: String): AccessibilityNodeInfo? {
