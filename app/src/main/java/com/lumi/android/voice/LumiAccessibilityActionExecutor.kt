@@ -17,6 +17,10 @@ class LumiAccessibilityActionExecutor {
             LumiIntent.OpenRecents -> service.openRecents() to "Abrí las aplicaciones recientes."
             LumiIntent.ScrollForward -> service.scrollForward() to "Desplacé la pantalla hacia abajo."
             LumiIntent.ScrollBackward -> service.scrollBackward() to "Desplacé la pantalla hacia arriba."
+            LumiIntent.DescribeScreen -> {
+                val description = service.describeScreen()
+                if (description.isBlank()) false to "No pude leer el contenido visible de la pantalla." else true to "En pantalla veo:\n" + description
+            }
             is LumiIntent.ClickText -> service.clickText(intent.text) to "Toqué «" + intent.text + "»."
             is LumiIntent.TypeText -> service.setText(intent.text) to "Escribí el texto indicado."
             else -> false to ""
