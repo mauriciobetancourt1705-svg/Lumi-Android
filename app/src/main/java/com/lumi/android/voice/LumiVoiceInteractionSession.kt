@@ -26,6 +26,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
     private var voiceManager: LumiVoiceManager? = null
     private val intentEngine = LumiIntentEngine()
     private lateinit var actionExecutor: LumiAndroidActionExecutor
+    private lateinit var accessibilityExecutor: LumiAccessibilityActionExecutor
     private lateinit var messageExecutor: LumiMessageActionExecutor
     private lateinit var memoryStore: LumiMemoryStore
     private lateinit var taskPlanner: LumiTaskPlanner
@@ -119,6 +120,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
         root.addView(transcript)
 
         actionExecutor = LumiAndroidActionExecutor(context)
+        accessibilityExecutor = LumiAccessibilityActionExecutor()
         val contactResolver = LumiContactResolver(context)
         messageExecutor = LumiMessageActionExecutor(context, contactResolver)
         memoryStore = LumiMemoryStore(context)
@@ -326,6 +328,13 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             LumiIntent.VolumeUp,
             LumiIntent.VolumeDown,
             LumiIntent.PlayPause -> executeAndroidAction(intent)
+            LumiIntent.GoBack,
+            LumiIntent.GoHome,
+            LumiIntent.OpenRecents,
+            LumiIntent.ScrollForward,
+            LumiIntent.ScrollBackward,
+            is LumiIntent.ClickText,
+            is LumiIntent.TypeText -> executeAccessibilityAction(intent)
             is LumiIntent.Conversation -> askEducationLumi(rawText)
             else -> askEducationLumi(rawText)
         }
@@ -375,6 +384,14 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
                     }
                 }
             }
+        }
+    }
+
+    private fun executeAccessibilityAction(intent: LumiIntent) {
+        silenceMode = false
+        status.text = "Lumi está actuando…"
+        accessibilityExecutor.execute(intent) { message, _ ->
+            handler.post { respond(message) }
         }
     }
 
