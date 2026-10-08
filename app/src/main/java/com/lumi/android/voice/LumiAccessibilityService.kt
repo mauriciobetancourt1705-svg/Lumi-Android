@@ -51,7 +51,7 @@ class LumiAccessibilityService : AccessibilityService() {
     }
 
     fun clickDescription(description: String): Boolean =
-        findNodeByDescription(description)?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+        findNodeByDescription(description)?.let(::performClickOrParent) == true
 
     fun setText(text: String): Boolean {
         val node = findFocusedEditable() ?: findFirstEditable(rootInActiveWindow) ?: return false
@@ -69,6 +69,18 @@ class LumiAccessibilityService : AccessibilityService() {
 
     fun scrollBackward(): Boolean =
         findScrollable(rootInActiveWindow)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) == true
+
+    fun containsVisibleText(text: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val needle = text.trim()
+        if (needle.isBlank()) return false
+        return findNode(root) { node ->
+            node.isVisibleToUser && (
+                node.text?.toString()?.contains(needle, ignoreCase = true) == true ||
+                    node.contentDescription?.toString()?.contains(needle, ignoreCase = true) == true
+                )
+        } != null
+    }
 
     fun describeScreen(): String {
         val root = rootInActiveWindow ?: return ""
