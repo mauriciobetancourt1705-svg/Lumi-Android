@@ -333,6 +333,7 @@ class LumiVoiceInteractionSession(context: Context) : VoiceInteractionSession(co
             LumiIntent.OpenRecents,
             LumiIntent.ScrollForward,
             LumiIntent.ScrollBackward,
+            LumiIntent.DescribeScreen,
             is LumiIntent.ClickText,
             is LumiIntent.TypeText -> executeAccessibilityAction(intent)
             is LumiIntent.Conversation -> askEducationLumi(rawText)
