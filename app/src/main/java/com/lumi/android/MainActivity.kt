@@ -66,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     private val personality = LumiPersonalityEngine()
     private val intentEngine = LumiIntentEngine()
     private lateinit var androidActionExecutor: com.lumi.android.voice.LumiAndroidActionExecutor
+    private lateinit var accessibilityExecutor: com.lumi.android.voice.LumiAccessibilityActionExecutor
     private lateinit var memoryStore: LumiMemoryStore
     private lateinit var contextEngine: LumiContextEngine
     private lateinit var notificationStore: LumiNotificationStore
@@ -208,6 +209,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply { text = "Programar check-in diario de Lumi"; setOnClickListener { scheduleDailyWellbeingCheckIn(); voiceManager.speak("Listo. Te recordaré una vez al día para saber cómo estás.") } }, lp())
         root.addView(Button(this).apply { text = "Ajustes de asistente"; setOnClickListener { startActivity(android.content.Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) } }, lp())
         androidActionExecutor = com.lumi.android.voice.LumiAndroidActionExecutor(this)
+        accessibilityExecutor = com.lumi.android.voice.LumiAccessibilityActionExecutor()
         memoryStore = LumiMemoryStore(this)
         contextEngine = LumiContextEngine()
         notificationStore = LumiNotificationStore(this)
@@ -557,6 +559,14 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread { if (message.isBlank()) scheduleConversationListen(300L) else speakInApp(message) }
                 }
             }
+            LumiIntent.GoBack,
+            LumiIntent.GoHome,
+            LumiIntent.OpenRecents,
+            LumiIntent.ScrollForward,
+            LumiIntent.ScrollBackward,
+            LumiIntent.DescribeScreen,
+            is LumiIntent.ClickText,
+            is LumiIntent.TypeText -> accessibilityExecutor.execute(intent) { message, _ -> runOnUiThread { speakInApp(message) } }
             is LumiIntent.Conversation -> askEducationLumiInApp(rawText)
             else -> askEducationLumiInApp(rawText)
         }
