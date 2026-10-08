@@ -128,7 +128,7 @@ class LumiBackgroundVoiceService : Service() {
         try {
             recognizer?.startListening(intent)
         } catch (_: RuntimeException) {
-            if (active) android.os.Handler(mainLooper).postDelayed({ listen() }, 1000L)
+            if (active) android.os.Handler(mainLooper).postDelayed({ startWakeWord() }, 1000L)
         }
     }
 
@@ -148,7 +148,7 @@ class LumiBackgroundVoiceService : Service() {
             LumiIntent.VolumeUp,
             LumiIntent.VolumeDown,
             LumiIntent.PlayPause -> actionExecutor.execute(intent) { message, _ ->
-                if (message.isBlank()) listen() else speak(message)
+                if (message.isBlank()) startWakeWord() else speak(message)
             }
             else -> askEducationLumi(raw)
         }
