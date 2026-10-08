@@ -11,6 +11,13 @@ sealed class LumiIntent {
     data object VolumeUp : LumiIntent()
     data object VolumeDown : LumiIntent()
     data object PlayPause : LumiIntent()
+    data object GoBack : LumiIntent()
+    data object GoHome : LumiIntent()
+    data object OpenRecents : LumiIntent()
+    data object ScrollForward : LumiIntent()
+    data object ScrollBackward : LumiIntent()
+    data class ClickText(val text: String) : LumiIntent()
+    data class TypeText(val text: String) : LumiIntent()
     data object Silence : LumiIntent()
     data object Resume : LumiIntent()
     data object Greeting : LumiIntent()
@@ -50,6 +57,20 @@ class LumiIntentEngine {
         if (containsAny(normalized, "sube el volumen", "sube volumen", "aumenta el volumen")) return LumiIntent.VolumeUp
         if (containsAny(normalized, "baja el volumen", "baja volumen", "disminuye el volumen")) return LumiIntent.VolumeDown
         if (containsAny(normalized, "pausa la musica", "pausa la música", "reproduce la musica", "reproduce la música", "pon musica", "pon música", "play", "pausa")) return LumiIntent.PlayPause
+
+        if (containsAny(normalized, "vuelve atras", "vuelve atrás", "regresa", "retrocede")) return LumiIntent.GoBack
+        if (containsAny(normalized, "ve al inicio", "ir al inicio", "pulsa inicio", "inicio")) return LumiIntent.GoHome
+        if (containsAny(normalized, "abre recientes", "muestra recientes", "aplicaciones recientes", "apps recientes")) return LumiIntent.OpenRecents
+        if (containsAny(normalized, "desplazate hacia abajo", "desplázate hacia abajo", "baja la pantalla", "haz scroll hacia abajo")) return LumiIntent.ScrollForward
+        if (containsAny(normalized, "desplazate hacia arriba", "desplázate hacia arriba", "sube la pantalla", "haz scroll hacia arriba")) return LumiIntent.ScrollBackward
+
+        extractAfter(normalized, listOf("pulsa ", "presiona ", "toca ", "haz clic en "))
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return LumiIntent.ClickText(it) }
+
+        extractAfter(normalized, listOf("escribe ", "escribe esto ", "introduce ", "introduce esto "))
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return LumiIntent.TypeText(it) }
 
         return LumiIntent.Conversation(text.trim())
     }
