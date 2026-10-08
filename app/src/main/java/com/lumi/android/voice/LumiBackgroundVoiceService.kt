@@ -26,6 +26,8 @@ class LumiBackgroundVoiceService : Service() {
     private val personality = com.lumi.android.wellbeing.LumiPersonalityEngine()
     private var active = false
     private var speaking = false
+    private var wakeWordActive = false
+    private lateinit var wakeWord: LumiWakeWordManager
 
     override fun onCreate() {
         super.onCreate()
@@ -51,6 +53,7 @@ class LumiBackgroundVoiceService : Service() {
         actionExecutor = LumiAndroidActionExecutor(this)
         memory = LumiMemoryStore(this)
         educationBridge = LumiEducationBridge(this)
+        wakeWord = LumiWakeWordManager(this) { onWakeWordDetected(it) }
         prepareRecognizer()
     }
 
@@ -60,8 +63,23 @@ class LumiBackgroundVoiceService : Service() {
             return START_NOT_STICKY
         }
         active = true
-        listen()
+        startWakeWord()
         return START_NOT_STICKY
+    }
+
+    private fun startWakeWord() {
+        if (!active || speaking || !::wakeWord.isInitialized || wakeWordActive) return
+        if (!wakeWord.isAvailable()) return
+        wakeWordActive = wakeWord.start()
+    }
+
+    private fun onWakeWordDetected(score: Float) {
+        if (!active || speaking) return
+        wakeWordActive = false
+        wakeWord.stop()
+        android.os.Handler(mainLooper).post {
+            listen()
+        }
     }
 
     private fun prepareRecognizer() {
@@ -84,13 +102,13 @@ class LumiBackgroundVoiceService : Service() {
             override fun onResults(results: Bundle?) {
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
                 if (text.isBlank()) {
-                    listen()
+                    startWakeWord()
                     return
                 }
                 handle(text)
             }
             override fun onError(error: Int) {
-                if (active && !speaking) listen()
+                if (active && !speaking) startWakeWord()
             }
         })
     }
@@ -170,11 +188,11 @@ class LumiBackgroundVoiceService : Service() {
                 onStart = {},
                 onDone = {
                     speaking = false
-                    if (active) listen()
+                    if (active) startWakeWord()
                 },
                 onError = {
                     speaking = false
-                    if (active) listen()
+                    if (active) startWakeWord()
                 }
             )
         }
@@ -184,6 +202,7 @@ class LumiBackgroundVoiceService : Service() {
         active = false
         try { recognizer?.cancel(); recognizer?.destroy() } catch (_: RuntimeException) {}
         recognizer = null
+        if (::wakeWord.isInitialized) wakeWord.release()
         if (::voice.isInitialized) voice.shutdown()
         if (::educationBridge.isInitialized) educationBridge.shutdown()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
