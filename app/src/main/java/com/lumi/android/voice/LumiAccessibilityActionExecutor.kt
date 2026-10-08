@@ -11,6 +11,7 @@ class LumiAccessibilityActionExecutor {
             return
         }
 
+        val beforeRevision = service.revision()
         val result = when (intent) {
             LumiIntent.GoBack -> service.pressBack() to "Volví a la pantalla anterior."
             LumiIntent.GoHome -> service.pressHome() to "Volví a la pantalla de inicio."
@@ -31,12 +32,20 @@ class LumiAccessibilityActionExecutor {
             return
         }
 
-        // For state-changing UI actions, give Android a short moment to publish
-        // the resulting accessibility tree before reporting success.
-        if (intent is LumiIntent.ClickText || intent is LumiIntent.TypeText) {
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                onResult(result.second, true)
-            }, 180L)
+        // Verify that Android published at least one accessibility event after
+        // a state-changing action. This prevents Lumi from blindly claiming success.
+        if (intent is LumiIntent.ClickText || intent is LumiIntent.TypeText ||
+            intent is LumiIntent.GoBack || intent is LumiIntent.GoHome ||
+            intent is LumiIntent.OpenRecents || intent is LumiIntent.ScrollForward ||
+            intent is LumiIntent.ScrollBackward
+        ) {
+            service.waitForScreenChange(beforeRevision) { changed ->
+                if (changed) {
+                    onResult(result.second, true)
+                } else {
+                    onResult("La acción fue enviada, pero no pude verificar un cambio en pantalla.", false)
+                }
+            }
         } else {
             onResult(result.second, true)
         }
